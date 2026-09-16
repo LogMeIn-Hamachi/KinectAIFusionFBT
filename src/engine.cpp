@@ -47,6 +47,8 @@ View Engine::view() const {
         copy.calibrationRightSamples=alignment_.deviceSamples(2);
         copy.calibrationLeftStatus=alignment_.deviceStatus(1);
         copy.calibrationRightStatus=alignment_.deviceStatus(2);
+        copy.calibrationRetrying=alignment_.retrying();
+        copy.calibrationRetryReason=alignment_.retryReason();
     }
     if(copy.bodyCollecting) {
         double elapsed=now()-bodyCaptureStart_;
@@ -818,6 +820,8 @@ void Engine::outputLoop() {
                 os.collecting = !s.calibrationWaiting && (os.secondsRemaining <= int(calibrationHoldSeconds));
                 os.instruction = s.calibrationPrompt;
                 os.feedback = s.calibrationDetail;
+                os.isRetry = s.calibrationRetrying;
+                os.retryReason = s.calibrationRetryReason;
                 os.leftSamples = s.calibrationLeftSamples;
                 os.rightSamples = s.calibrationRightSamples;
                 os.leftStatus = s.calibrationLeftStatus;

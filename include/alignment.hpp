@@ -84,6 +84,8 @@ public:
     const auto& offsets()const{return offsets_;}
     std::string agreement()const{return sessions_[4].agreement(result_);}
     std::string feedback()const;
+    bool retrying()const{return !retryReason_.empty() && !captureStart_;}
+    std::string retryReason()const{return retryReason_;}
     size_t size()const;
     void writeCsv(std::ostream&)const;
 };

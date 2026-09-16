@@ -58,6 +58,9 @@ struct VrOverlay::Impl {
     bool lastWaiting_{false};
     bool lastDone_{false};
     bool lastSuccess_{false};
+    bool lastIsRetry_{false};
+    std::string lastRetryReason_;
+    std::string lastFeedback_;
     int lastLeftSamples_{-1};
     int lastRightSamples_{-1};
     std::string lastLeftStatus_;
@@ -150,21 +153,31 @@ struct VrOverlay::Impl {
 
         // Step pill badge
         std::wstring stepBadge;
+        Gdiplus::Color badgeBgColor(255, 24, 48, 60);
+        Gdiplus::Color badgeBorderColor(255, 60, 120, 135);
+        Gdiplus::Color badgeTextColor(255, 97, 225, 194);
+
         if (state.done) {
             stepBadge = L"COMPLETE";
+        } else if (state.isRetry) {
+            stepBadge = L"RETRY REQUIRED (" + std::to_wstring(state.step + 1) + L"/5)";
+            badgeBgColor = Gdiplus::Color(255, 54, 28, 14);
+            badgeBorderColor = Gdiplus::Color(255, 180, 80, 30);
+            badgeTextColor = Gdiplus::Color(255, 255, 195, 60);
         } else if (state.step == 4) {
             stepBadge = L"VALIDATION CHECK (5/5)";
         } else {
             stepBadge = L"STEP " + std::to_wstring(state.step + 1) + L" OF 5";
         }
-        Gdiplus::SolidBrush badgeBg(Gdiplus::Color(255, 24, 48, 60));
-        Gdiplus::Pen badgeBorder(Gdiplus::Color(255, 60, 120, 135), 1.5f);
+        Gdiplus::SolidBrush badgeBg(badgeBgColor);
+        Gdiplus::Pen badgeBorder(badgeBorderColor, 1.5f);
         drawRoundedRect(g, badgeBorder, badgeBg, OverlayWidth - 260, 32, 218, 32, 8);
+        Gdiplus::SolidBrush badgeTextBrush(badgeTextColor);
         Gdiplus::StringFormat centerFormat;
         centerFormat.SetAlignment(Gdiplus::StringAlignmentCenter);
         centerFormat.SetLineAlignment(Gdiplus::StringAlignmentCenter);
         g.DrawString(stepBadge.c_str(), -1, &stepBadgeFont,
-                     Gdiplus::RectF(OverlayWidth - 260, 32, 218, 32), &centerFormat, &tealBrush);
+                     Gdiplus::RectF(OverlayWidth - 260, 32, 218, 32), &centerFormat, &badgeTextBrush);
 
         // 3. Left Column: Pose Title and Description
         std::wstring poseTitles[5] = {
@@ -172,14 +185,14 @@ struct VrOverlay::Impl {
             L"Pose 2: Hands Forward (Chest Height)",
             L"Pose 3: Hands Apart (Diagonal Out)",
             L"Pose 4: Hands Up (In Front of Chest)",
-            L"Pose 5: Check Pose (Hands Forward)"
+            L"Pose 5: Check Pose (Hands Shoulder-Width)"
         };
         std::wstring poseDescriptions[5] = {
             L"Hold both controllers low in front of your waist.\nPoint both controllers straight down towards the floor.\nKeep hands slightly forward away from your body so Kinect sees wrists.",
             L"Hold controllers forward at chest height.\nPoint both controllers straight forward towards the camera.",
             L"Hold hands comfortably apart to each side.\nPoint controllers diagonally outward to each side.",
             L"Hold controllers in front of your chest.\nPoint both controllers straight up towards the ceiling.",
-            L"Validation check: hold hands forward between waist and chest.\nPoint controllers straight forward."
+            L"Hold hands forward at waist-to-chest height, SHOULDER-WIDTH apart.\nKeep wrists clear of your torso so Kinect has an unobstructed view.\nPoint both controllers straight forward."
         };
 
         int step = std::clamp(state.step, 0, 4);
@@ -251,7 +264,7 @@ struct VrOverlay::Impl {
         Gdiplus::SolidBrush arrowBrush(Gdiplus::Color(255, 83, 217, 255));
         Gdiplus::SolidBrush arrowTextBrush(Gdiplus::Color(255, 83, 217, 255));
 
-        std::wstring arrowLabels[5] = { L"POINT DOWN", L"POINT FORWARD", L"POINT OUTWARD", L"POINT UP", L"CHECK POSE" };
+        std::wstring arrowLabels[5] = { L"POINT DOWN", L"POINT FORWARD", L"POINT OUTWARD", L"POINT UP", L"CHECK (SHOULDER-WIDTH)" };
         g.DrawString(arrowLabels[step].c_str(), -1, &diagramFont, Gdiplus::RectF(diagX, diagY + 185, diagW, 20), &centerFormat, &arrowTextBrush);
 
         if (step == 0) {
@@ -292,6 +305,33 @@ struct VrOverlay::Impl {
                          Gdiplus::RectF(bannerX, bannerY + 45, bannerW, 35), &centerFormat, &doneText);
             g.DrawString(L"Closing overlay and resuming live tracker output in SteamVR...", -1, &bannerSubFont,
                          Gdiplus::RectF(bannerX, bannerY + 90, bannerW, 25), &centerFormat, &grayBrush);
+        } else if (state.isRetry && state.waitingForReady) {
+            // Dedicated Amber / Coral "TRY AGAIN" Banner
+            Gdiplus::SolidBrush retryBg(Gdiplus::Color(255, 48, 26, 14));
+            Gdiplus::Pen retryPen(Gdiplus::Color(255, 180, 80, 30), 2.0f);
+            drawRoundedRect(g, retryPen, retryBg, bannerX, bannerY, bannerW, bannerH, 16);
+
+            Gdiplus::SolidBrush retryTitleBrush(Gdiplus::Color(255, 255, 195, 60));
+            std::wstring retryTitle = L"\u26A0 POSE DID NOT PASS \u2014 SQUEEZE TRIGGER TO RETRY";
+            g.DrawString(retryTitle.c_str(), -1, &bannerTitleFont,
+                         Gdiplus::RectF(bannerX, bannerY + 28, bannerW, 35), &centerFormat, &retryTitleBrush);
+
+            std::wstring reasonW;
+            if (!state.retryReason.empty()) {
+                reasonW = std::wstring(state.retryReason.begin(), state.retryReason.end());
+            } else if (!state.feedback.empty()) {
+                reasonW = std::wstring(state.feedback.begin(), state.feedback.end());
+            } else {
+                reasonW = L"Wrists were occluded or not held steady. Check your position and try again.";
+            }
+
+            g.DrawString(reasonW.c_str(), -1, &bannerSubFont,
+                         Gdiplus::RectF(bannerX + 30, bannerY + 68, bannerW - 60, 42), &centerFormat, &whiteBrush);
+
+            Gdiplus::SolidBrush actionBrush(Gdiplus::Color(255, 255, 215, 90));
+            std::wstring actionText = L">> RELEASE & SQUEEZE EITHER TRIGGER TO RETRY <<   \u2022   Earlier poses kept";
+            g.DrawString(actionText.c_str(), -1, &diagramFont,
+                         Gdiplus::RectF(bannerX, bannerY + 118, bannerW, 25), &centerFormat, &actionBrush);
         } else if (state.waitingForReady) {
             // Waiting for trigger state
             Gdiplus::SolidBrush waitBg(Gdiplus::Color(255, 18, 38, 54));
@@ -411,6 +451,9 @@ struct VrOverlay::Impl {
                         lastCollecting_ != state.collecting ||
                         lastDone_ != state.done ||
                         lastSuccess_ != state.success ||
+                        lastIsRetry_ != state.isRetry ||
+                        lastRetryReason_ != state.retryReason ||
+                        lastFeedback_ != state.feedback ||
                         lastLeftSamples_ != state.leftSamples ||
                         lastRightSamples_ != state.rightSamples ||
                         lastLeftStatus_ != state.leftStatus ||
@@ -426,6 +469,9 @@ struct VrOverlay::Impl {
         lastCollecting_ = state.collecting;
         lastDone_ = state.done;
         lastSuccess_ = state.success;
+        lastIsRetry_ = state.isRetry;
+        lastRetryReason_ = state.retryReason;
+        lastFeedback_ = state.feedback;
         lastLeftSamples_ = state.leftSamples;
         lastRightSamples_ = state.rightSamples;
         lastLeftStatus_ = state.leftStatus;

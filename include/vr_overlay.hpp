@@ -12,6 +12,8 @@ struct OverlayState {
     bool collecting{false};    // true = holding still during capture
     bool done{false};          // true = finished all poses
     bool success{false};       // true = validation passed
+    bool isRetry{false};       // true = pose validation/tracking failed, waiting for user to squeeze trigger again
+    std::string retryReason;   // specific reason for retry
     std::string instruction;   // Current pose instruction
     std::string feedback;      // Error / detail feedback
     std::string agreement;     // Final agreement stats

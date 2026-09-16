@@ -175,7 +175,7 @@ AlignmentCue alignmentCue(int step,double elapsed,bool done,bool waiting) {
         "Hands comfortably forward at chest height. Point controllers forwards.",
         "Hands comfortably apart. Point controllers diagonally out to each side.",
         "Hands in front of your chest. Point both controllers up.",
-        "Check: hands forward, between waist and chest. Point controllers forwards."};
+        "Check: hands forward and shoulder-width apart, clear of your torso. Point controllers forwards."};
     AlignmentCue c;c.step=std::clamp(step,0,calibrationPoseCount-1);
     if(done){c.instruction="Alignment finished.";return c;}
     c.instruction="Pose "+std::to_string(c.step+1)+" of 5: "+poses[c.step];
@@ -277,10 +277,10 @@ void GuidedAlignment::add(const Frame& frame,uint32_t id,const Settings& setting
         int n=0,close=0;double squared=0;
         for(auto& s:session.samples())if(s.device==d) {
             double error=norm(candidate_.transform.apply(s.camera)-s.pair().world);++n;
-            if(error<.10){++close;squared+=error*error;}
+            if(error<.12){++close;squared+=error*error;}
         }
-        if(!close || double(close)/n<.8 || std::sqrt(squared/close)>.05) {
-            retry(std::string(d==1?"Left":"Right")+" wrist did not agree in the check. Keep the same grip and wrists clear, then retry this pose. Earlier poses are kept.");return;
+        if(!close || double(close)/n<calibrationMinInlierFraction || std::sqrt(squared/close)>calibrationMaxRms) {
+            retry(std::string(d==1?"Left":"Right")+" wrist did not agree in the check. Hold hands shoulder-width apart and clear of torso, then squeeze trigger to retry. Earlier poses are kept.");return;
         }
     }
     result_=candidate_;done_=true;
