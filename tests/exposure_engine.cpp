@@ -3,6 +3,7 @@
 int main(int argc,char** argv){try{
     if(argc!=2)return 2;
     kf::Engine engine(std::filesystem::absolute(argv[1]));
+    engine.chooseExposure(true);
     engine.start();
     const double start=kf::now();std::string status;
     while(kf::now()-start<25) {

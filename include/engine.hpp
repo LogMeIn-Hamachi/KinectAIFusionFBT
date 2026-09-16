@@ -13,7 +13,7 @@ struct View {
     int modelChoice{}; // 0 SAM original, 1 NLF-S, 2 SAM FP8, 3 SAM optimized; stopped only.
     int cadenceChoice{}; // 0 Auto (GPU adaptive), 1 Full (30 Hz), 2 Balanced (20 Hz), 3 Low GPU (15 Hz)
     std::string cadenceStatus{"Auto (30 Hz)"};
-    bool prefer30{true};
+    bool prefer30{false};
     std::string exposureStatus;
     Calibration calibration;
     Settings settings;

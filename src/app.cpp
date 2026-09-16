@@ -48,7 +48,6 @@ enum {
     SoleOffset,
     TiltDown,
     TiltUp,
-    ExposureToggle,
     SteamVrToggle,
     SaveOffsets = 130,
     OffsetBase = 140
@@ -285,7 +284,6 @@ void paint() {
         text(dc, 184, 289, 650, 22, L"X                         Y                         Z",
              RGB(164, 185, 202));
         text(dc, 880, 289, 290, 24, L"Ankle-to-sole distance (metres)", RGB(164, 185, 202), smallFont);
-        text(dc, 520, 492, 650, 26, L"Change while stopped. Dim scenes may look darker or grainier.",RGB(164,185,202),smallFont);
         text(dc, 40, 572, 320, 24, L"AI model (change while stopped)",RGB(164,185,202),smallFont);
         text(dc, 385, 572, 400, 24, L"Tracking mode / diagnostic comparison",RGB(164,185,202),smallFont);
         text(dc, 805, 572, 360, 24, L"GPU cadence / performance",RGB(164,185,202),smallFont);
@@ -320,11 +318,9 @@ void advancedControls(bool show) {
     std::wostringstream sole;
     sole << s.settings.soleOffset;
     SetDlgItemTextW(mainWindow, SoleOffset, sole.str().c_str());
-    SendDlgItemMessageW(mainWindow,ExposureToggle,BM_SETCHECK,s.prefer30?BST_CHECKED:BST_UNCHECKED,0);
-    EnableWindow(GetDlgItem(mainWindow,ExposureToggle),!s.running);
     SendDlgItemMessageW(mainWindow,SteamVrToggle,BM_SETCHECK,s.steamVrOutput?BST_CHECKED:BST_UNCHECKED,0);
     SendMessageW(cadenceBox, CB_SETCURSEL, s.cadenceChoice, 0);
-    for (int id : {DepthToggle, ConstraintToggle, ContactToggle, VrToggle, SaveOffsets, SoleOffset, ExposureToggle, SteamVrToggle, ModelSelect, ModeSelect, CadenceSelect})
+    for (int id : {DepthToggle, ConstraintToggle, ContactToggle, VrToggle, SaveOffsets, SoleOffset, SteamVrToggle, ModelSelect, ModeSelect, CadenceSelect})
         ShowWindow(GetDlgItem(mainWindow, id), show ? SW_SHOW : SW_HIDE);
 }
 void setup() {
@@ -412,8 +408,7 @@ LRESULT CALLBACK procedure(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
             control(L"BUTTON", L"Foot contact", ContactToggle, 490, 452, 180, 30, BS_AUTOCHECKBOX);
             control(L"BUTTON", L"VR constraints", VrToggle, 685, 452, 190, 30, BS_AUTOCHECKBOX);
             control(L"BUTTON", L"Apply offsets", SaveOffsets, 675, 317, 160, 32);
-            control(L"BUTTON", L"Prioritize 30 fps (Kinect v2)", ExposureToggle, 40, 489, 460, 30, BS_AUTOCHECKBOX);
-            control(L"BUTTON", L"SteamVR trackers (instead of OSC)", SteamVrToggle, 40, 529, 460, 30, BS_AUTOCHECKBOX);
+            control(L"BUTTON", L"SteamVR trackers (instead of OSC)", SteamVrToggle, 40, 489, 460, 30, BS_AUTOCHECKBOX);
             for (int id : {DepthToggle, ConstraintToggle, ContactToggle, VrToggle})
                 SendDlgItemMessageW(window, id, BM_SETCHECK, BST_CHECKED, 0);
             advancedControls(false);
@@ -430,7 +425,6 @@ LRESULT CALLBACK procedure(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
                 }
             }
             auto s = engine->view();
-            enableIfChanged(GetDlgItem(window,ExposureToggle),!s.running && !stopFuture.valid());
             if (s.collecting && s.calibrationSpeech != lastSpokenPrompt) {
                 lastSpokenPrompt = s.calibrationSpeech;
                 if (calibrationVoice)
@@ -563,10 +557,6 @@ LRESULT CALLBACK procedure(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
             case Advanced:
                 advanced = !advanced;
                 advancedControls(advanced);
-                break;
-            case ExposureToggle:
-                engine->chooseExposure(SendDlgItemMessageW(window,ExposureToggle,BM_GETCHECK,0,0)==BST_CHECKED);
-                SendDlgItemMessageW(window,ExposureToggle,BM_SETCHECK,engine->view().prefer30?BST_CHECKED:BST_UNCHECKED,0);
                 break;
             case SaveOffsets: {
                 auto s = engine->view().settings;

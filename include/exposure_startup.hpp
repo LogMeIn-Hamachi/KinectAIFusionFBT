@@ -4,7 +4,7 @@ namespace kf {
 // A finite retry budget avoids ongoing control work in the tracking loop.
 struct ExposureStartup {
     static constexpr unsigned maxAttempts=3;
-    bool prefer30{true}, complete{};
+    bool prefer30{false}, complete{};
     unsigned attempts{};
     double nextAttempt{};
     void reset(bool prefer) { *this={};prefer30=prefer; }

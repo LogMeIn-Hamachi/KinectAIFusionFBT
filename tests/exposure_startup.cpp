@@ -7,7 +7,7 @@ int main(int argc,char** argv) {
         const int cycles=argc>1?std::stoi(argv[1]):5;
         for(int i=0;i<cycles;++i) {
             kf::KinectCapture camera;
-            const double start=kf::now();camera.open();
+            const double start=kf::now();camera.open(true);
             std::cout<<"cycle="<<i<<" open_s="<<kf::now()-start<<" status="<<camera.exposureStatus<<std::endl;
             double first{},last{},exposure{},interval{};unsigned frames{};
             while(kf::now()-start<9) {

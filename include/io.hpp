@@ -28,7 +28,7 @@ class KinectCapture {
     KinectCapture();
     ~KinectCapture();
     KinectCapture(const KinectCapture &) = delete;
-    void open(bool prefer30 = true);
+    void open(bool prefer30 = false);
     std::shared_ptr<Frame> poll();
     bool healthy() const;
     std::string calibrationKey() const;

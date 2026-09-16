@@ -15,8 +15,6 @@ Engine::Engine(std::filesystem::path root) : root_(std::move(root)) {
     std::ifstream outputFile(root_/"tracking-output.txt");std::string outputName;
     if(outputFile>>outputName)view_.steamVrOutput=outputName!="osc";
     calibrationFile_=root_/"calibration.txt";
-    std::ifstream exposureFile(root_/"kinect-v2-exposure.txt");std::string exposure;
-    if(exposureFile>>exposure)view_.prefer30=exposure!="auto";
     std::ifstream cadenceFile(root_/"tracking-cadence.txt");int savedCadence=0;
     if(cadenceFile>>savedCadence && savedCadence>=0 && savedCadence<=3) {
         view_.cadenceChoice=savedCadence;
@@ -141,9 +139,6 @@ void Engine::bodyCalibration() {
 void Engine::chooseExposure(bool prefer30) {
     std::lock_guard l(mutex_);
     if(view_.running)return;
-    std::ofstream file(root_/"kinect-v2-exposure.txt",std::ios::trunc);
-    file<<(prefer30?"prefer-30":"auto")<<'\n';file.flush();
-    if(!file){view_.notice="Could not save camera exposure preference.";return;}
     view_.prefer30=prefer30;
     view_.notice=prefer30?"30 fps priority selected. Press Start. Dim scenes may look darker or grainier.":
         "Automatic exposure selected. In dim light the colour camera may slow to 15 fps.";

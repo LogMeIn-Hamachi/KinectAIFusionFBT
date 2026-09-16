@@ -14,7 +14,7 @@
 
 **Tracking jitter or wrong side-on/lying poses:** a single camera cannot see occluded limbs. Keep the entire legs in view, avoid furniture covering the feet, and use adequate room lighting for SAM's colour image. Difficult occlusions remain a limitation. The SDK baseline modes in Advanced are diagnostic comparisons; RGB-D fusion is the normal tracking mode.
 
-**Dark v2 colour image:** Advanced → Prioritize 30 fps limits exposure to favour responsiveness. Stop tracking to change it. Automatic exposure can brighten dim scenes but may reduce colour capture to 15 fps. The displayed fps and exposure are measured/reported values, not a guarantee that inference also runs at 30 fps. More room lighting reduces this trade-off.
+**Dark v2 colour image:** Camera exposure is automatic. In dim lighting, the Kinect colour camera may reduce its capture rate to brighten the scene. Adequate room lighting allows full-rate capture and improves AI tracking quality. The displayed fps and exposure are measured/reported values, not a guarantee that inference also runs at 30 fps.
 
 **GPU load with VRChat:** reduce VRChat's own graphics load to leave processing headroom. SAM optimized is the intended faster model. This preview does not guarantee a specific application frame rate on another GPU.
 

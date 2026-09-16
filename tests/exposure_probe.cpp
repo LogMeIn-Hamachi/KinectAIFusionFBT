@@ -32,13 +32,13 @@ int main(){
         capture.prioritize30(false);measure(capture,"automatic_restored",5);
         capture.close();
         kf::KinectCapture facade;facade.open();
-        measure(facade,"app_capture_default",12,true);
+        measure(facade,"app_capture_default",7);
         std::cout<<facade.exposureStatus<<std::endl;
-        if(facade.exposureStatus.find("30 fps priority")!=0)throw std::runtime_error("Default exposure control not applied");
+        if(facade.exposureStatus!="Automatic exposure")throw std::runtime_error("Default exposure control not applied");
         facade.close();
-        facade.open(false);
-        measure(facade,"app_capture_auto",7);
-        if(facade.exposureStatus!="Automatic exposure")throw std::runtime_error("Automatic selection not applied");
+        facade.open(true);
+        measure(facade,"app_capture_priority_30",12,true);
+        if(facade.exposureStatus.find("30 fps priority")!=0)throw std::runtime_error("Priority 30 selection not applied");
         facade.close();
     }catch(const std::exception& e){std::cerr<<e.what()<<std::endl;return 1;}
 }
