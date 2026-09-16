@@ -11,7 +11,7 @@
 using namespace kf;
 namespace {
 std::unique_ptr<Engine> engine;
-HWND mainWindow{}, players{}, modeBox{}, modelBox{};
+HWND mainWindow{}, players{}, modeBox{}, modelBox{}, cadenceBox{};
 HFONT font{}, titleFont{}, smallFont{};
 ISpVoice *calibrationVoice{};
 std::string lastSpokenPrompt;
@@ -36,6 +36,7 @@ enum {
     Folder,
     ModeSelect,
     ModelSelect,
+    CadenceSelect,
     Preview,
     Advanced,
     Saved,
@@ -220,7 +221,8 @@ void paint() {
     std::wostringstream d;
     d << wide(modeName(s.state.mode)) << L"\n" << wide(s.poseSource) << L"\n"
       << wide(s.sensor) << L"\n\n"
-      << wide(s.inference) << L"\n\n"
+      << wide(s.inference) << L"\n"
+      << L"Cadence  " << wide(s.cadenceStatus) << L"\n\n"
       << wide(s.vr) << L"\n\n"
       << std::fixed << std::setprecision(1) << L"Frames  " << s.frames << L"    Dropped  " << s.dropped
       << L"\nInference  " << s.inferenceMs << L" ms    Fit  " << s.state.fitMs << L" ms\nQueue age  "
@@ -286,6 +288,7 @@ void paint() {
         text(dc, 520, 492, 650, 26, L"Change while stopped. Dim scenes may look darker or grainier.",RGB(164,185,202),smallFont);
         text(dc, 40, 572, 320, 24, L"AI model (change while stopped)",RGB(164,185,202),smallFont);
         text(dc, 385, 572, 400, 24, L"Tracking mode / diagnostic comparison",RGB(164,185,202),smallFont);
+        text(dc, 805, 572, 360, 24, L"GPU cadence / performance",RGB(164,185,202),smallFont);
         text(dc, 40, 641, 1100, 28,
              L"Use RGB-D fusion for normal tracking. Sole distance is measured below the ankle; default 0.075 m.",
              RGB(164,185,202),smallFont);
@@ -320,7 +323,8 @@ void advancedControls(bool show) {
     SendDlgItemMessageW(mainWindow,ExposureToggle,BM_SETCHECK,s.prefer30?BST_CHECKED:BST_UNCHECKED,0);
     EnableWindow(GetDlgItem(mainWindow,ExposureToggle),!s.running);
     SendDlgItemMessageW(mainWindow,SteamVrToggle,BM_SETCHECK,s.steamVrOutput?BST_CHECKED:BST_UNCHECKED,0);
-    for (int id : {DepthToggle, ConstraintToggle, ContactToggle, VrToggle, SaveOffsets, SoleOffset, ExposureToggle, SteamVrToggle, ModelSelect, ModeSelect})
+    SendMessageW(cadenceBox, CB_SETCURSEL, s.cadenceChoice, 0);
+    for (int id : {DepthToggle, ConstraintToggle, ContactToggle, VrToggle, SaveOffsets, SoleOffset, ExposureToggle, SteamVrToggle, ModelSelect, ModeSelect, CadenceSelect})
         ShowWindow(GetDlgItem(mainWindow, id), show ? SW_SHOW : SW_HIDE);
 }
 void setup() {
@@ -399,6 +403,10 @@ LRESULT CALLBACK procedure(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
             for (auto name : {L"RGB-D fusion (experimental)", L"Raw SDK baseline", L"Filtered SDK baseline"})
                 SendMessageW(modeBox, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name));
             SendMessageW(modeBox, CB_SETCURSEL, 0, 0);
+            cadenceBox = control(WC_COMBOBOXW, L"", CadenceSelect, 805, 598, 360, 180, CBS_DROPDOWNLIST);
+            for (auto name : {L"Auto (GPU adaptive)", L"30 Hz (Full AI)", L"20 Hz (Balanced)", L"15 Hz (Low GPU / Heavy VRChat)"})
+                SendMessageW(cadenceBox, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name));
+            SendMessageW(cadenceBox, CB_SETCURSEL, engine->view().cadenceChoice, 0);
             control(L"BUTTON", L"Registered depth", DepthToggle, 40, 452, 210, 30, BS_AUTOCHECKBOX);
             control(L"BUTTON", L"Bone constraints", ConstraintToggle, 265, 452, 210, 30, BS_AUTOCHECKBOX);
             control(L"BUTTON", L"Foot contact", ContactToggle, 490, 452, 180, 30, BS_AUTOCHECKBOX);
@@ -490,6 +498,11 @@ LRESULT CALLBACK procedure(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
                 auto s = engine->view().settings;
                 s.baseline = int(SendMessageW(modeBox, CB_GETCURSEL, 0, 0));
                 engine->settings(s);
+                return 0;
+            }
+            if (id == CadenceSelect && HIWORD(wp) == CBN_SELCHANGE) {
+                const auto selected = int(SendMessageW(cadenceBox, CB_GETCURSEL, 0, 0));
+                if (selected >= 0 && selected <= 3) engine->chooseCadence(selected);
                 return 0;
             }
             if (HIWORD(wp) != BN_CLICKED)

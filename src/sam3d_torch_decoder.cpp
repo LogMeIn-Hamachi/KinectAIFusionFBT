@@ -16,7 +16,7 @@ struct Decoder {
     std::vector<torch::Tensor> inputs;
     std::vector<torch::jit::IValue> arguments;
     std::vector<torch::Tensor> outputs;
-    c10::cuda::CUDAStream stream=c10::cuda::getStreamFromPool();
+    c10::cuda::CUDAStream stream=c10::cuda::getStreamFromPool(true);
     at::cuda::CUDAGraph graph;
     bool captured=false;
     std::array<double,3> timings{};
@@ -64,9 +64,8 @@ struct Decoder {
         timings[1]=(clock()-start)*1000;start=clock();
         float *dest[]{xyz,uv,rotations};size_t sizes[]{210,140,1143};
         for(int i=0;i<3;++i) {
-            auto cpu=outputs[i].to(torch::kCPU).contiguous();
-            if(cpu.numel()!=sizes[i] || cpu.scalar_type()!=torch::kFloat32) throw std::runtime_error("Wrong native decoder output");
-            std::memcpy(dest[i],cpu.data_ptr<float>(),sizes[i]*sizeof(float));
+            if(outputs[i].numel()!=sizes[i] || outputs[i].scalar_type()!=torch::kFloat32) throw std::runtime_error("Wrong native decoder output");
+            cudaMemcpyAsync(dest[i],outputs[i].data_ptr<float>(),sizes[i]*sizeof(float),cudaMemcpyDeviceToHost,stream);
         }
         stream.synchronize();
         timings[2]=(clock()-start)*1000;

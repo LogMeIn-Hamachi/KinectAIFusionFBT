@@ -17,6 +17,12 @@ Engine::Engine(std::filesystem::path root) : root_(std::move(root)) {
     calibrationFile_=root_/"calibration.txt";
     std::ifstream exposureFile(root_/"kinect-v2-exposure.txt");std::string exposure;
     if(exposureFile>>exposure)view_.prefer30=exposure!="auto";
+    std::ifstream cadenceFile(root_/"tracking-cadence.txt");int savedCadence=0;
+    if(cadenceFile>>savedCadence && savedCadence>=0 && savedCadence<=3) {
+        view_.cadenceChoice=savedCadence;
+        const char* names[]{"Auto (GPU adaptive)","30 Hz (Full AI)","20 Hz (Balanced)","15 Hz (Low GPU / Heavy VRChat)"};
+        view_.cadenceStatus=names[savedCadence];
+    }
     calibrationAccepted_ = loadCalibration(calibrationFile_, view_.calibration, view_.settings,&view_.wristOffsetsReady);
 }
 Engine::~Engine() {
@@ -141,6 +147,16 @@ void Engine::chooseExposure(bool prefer30) {
     view_.prefer30=prefer30;
     view_.notice=prefer30?"30 fps priority selected. Press Start. Dim scenes may look darker or grainier.":
         "Automatic exposure selected. In dim light the colour camera may slow to 15 fps.";
+}
+void Engine::chooseCadence(int choice) {
+    std::lock_guard l(mutex_);
+    if(choice<0 || choice>3)return;
+    view_.cadenceChoice=choice;
+    std::ofstream file(root_/"tracking-cadence.txt",std::ios::trunc);
+    file<<choice<<'\n';
+    const char* names[]{"Auto (GPU adaptive)","30 Hz (Full AI)","20 Hz (Balanced)","15 Hz (Low GPU / Heavy VRChat)"};
+    view_.cadenceStatus=names[choice];
+    view_.notice=std::string("GPU tracking cadence: ")+names[choice]+".";
 }
 void Engine::beginCalibration() {
     std::lock_guard l(mutex_);
@@ -447,6 +463,12 @@ void Engine::processLoop() {
         std::vector<Body> bodySamples;
         bool collectingBody = false;
         bool samReplayNotice=false;
+        std::optional<Sam3dPrediction> lastSamPrediction;
+        std::optional<BodyPrediction> lastNlfPrediction;
+        double lastInferenceHost = 0;
+        uint64_t inferenceFrameCount = 0;
+        int autoThrottleRemaining = 0;
+        double lastMeasuredInferenceMs = 0;
         while (run_) {
             auto next = measurements_.pop(!view().replay);
             if (!next)
@@ -487,6 +509,9 @@ void Engine::processLoop() {
                 lastDepth = ~0u;
                 lastEpoch = frame->epoch;
                 lastCrop.reset();
+                lastSamPrediction.reset();
+                lastNlfPrediction.reset();
+                lastInferenceHost = 0;
             }
             if (frame->depthId == lastDepth)
                 continue;
@@ -497,6 +522,9 @@ void Engine::processLoop() {
                 continuity.reset();
                 collectingBody=false;{std::lock_guard l(mutex_);view_.bodyCollecting=false;}
                 lastCrop.reset();
+                lastSamPrediction.reset();
+                lastNlfPrediction.reset();
+                lastInferenceHost = 0;
             }
             estimator.settings = config.settings;
             if (config.replay && frame->runConfig)
@@ -511,6 +539,9 @@ void Engine::processLoop() {
                     collectingBody=false;calibrateBody_=false;
                     {std::lock_guard l(mutex_);view_.bodyCollecting=false;}
                     lastCrop.reset();
+                    lastSamPrediction.reset();
+                    lastNlfPrediction.reset();
+                    lastInferenceHost = 0;
                     message("Player recovered after Kinect changed its body ID; headset and both controllers "
                             "matched.");
                 } else
@@ -529,6 +560,29 @@ void Engine::processLoop() {
             std::optional<PosePrior> learned;
             std::optional<Keypoints> samOverlay;
             double begin = now(), inferenceMs = 0;
+            ++inferenceFrameCount;
+            int cadence = config.cadenceChoice; // 0 Auto, 1 Full (30Hz), 2 Balanced (20Hz), 3 Low GPU (15Hz)
+            bool shouldInfer = true;
+            if (config.replay) {
+                shouldInfer = true;
+            } else if (cadence == 1) {
+                shouldInfer = true;
+            } else if (cadence == 2) {
+                shouldInfer = (inferenceFrameCount % 3 != 0); // 20 Hz (2 of 3)
+            } else if (cadence == 3) {
+                shouldInfer = (inferenceFrameCount % 2 != 0); // 15 Hz (1 of 2)
+            } else {
+                // Auto: throttle to 15 Hz when inference > 24ms or queue > 12ms
+                if (lastMeasuredInferenceMs > 24.0 || config.queueMs > 12.0) {
+                    autoThrottleRemaining = 30;
+                }
+                if (autoThrottleRemaining > 0) {
+                    --autoThrottleRemaining;
+                    shouldInfer = (inferenceFrameCount % 2 != 0);
+                } else {
+                    shouldInfer = true;
+                }
+            }
             if ((model.ready() || sam.ready() || nlf.ready()) && id && config.settings.inference && config.settings.baseline == 0 &&
                 lastCrop && frame->host - cropTime < 0.12) {
                 try {
@@ -537,24 +591,39 @@ void Engine::processLoop() {
                     if(nlf.ready()) {
                         auto camera=sam3dCamera(fitColorProjection(*frame));
                         if(camera.valid) {
-                            auto prediction=nlf.infer(*frame,*lastCrop,camera);
-                            samOverlay=kinectImageLabels(prediction.landmarks);
-                            auto evidence=bodyPoseEvidence(*frame,id,prediction,camera);
-                            keypoints=evidence.keypoints;learned=evidence.prior;
+                            if (shouldInfer || !lastNlfPrediction || frame->host - lastInferenceHost > 0.12) {
+                                lastNlfPrediction = nlf.infer(*frame, *lastCrop, camera);
+                                lastInferenceHost = frame->host;
+                                inferenceMs = (now() - begin) * 1000;
+                                lastMeasuredInferenceMs = inferenceMs;
+                            }
+                            if (lastNlfPrediction) {
+                                samOverlay = kinectImageLabels(lastNlfPrediction->landmarks);
+                                auto evidence = bodyPoseEvidence(*frame, id, *lastNlfPrediction, camera);
+                                keypoints = evidence.keypoints; learned = evidence.prior;
+                            }
                         }
                     } else if(sam.ready()) {
                         auto camera=sam3dCamera(fitColorProjection(*frame));
                         if(camera.valid) {
-                            // playerCrop has already applied padding/aspect expansion.
-                            // SAM expands that rectangle to square, without padding twice.
-                            auto crop=*lastCrop;crop.w=crop.h=std::max(crop.w,crop.h);
-                            auto prediction=sam.infer(*frame,crop,camera);
-                            samOverlay=kinectImageLabels(sam3dLandmarks(prediction));
-                            auto evidence=sam3dEvidence(*frame,id,prediction,camera);
-                            keypoints=evidence.keypoints;learned=evidence.prior;
+                            if (shouldInfer || !lastSamPrediction || frame->host - lastInferenceHost > 0.12) {
+                                auto crop=*lastCrop;crop.w=crop.h=std::max(crop.w,crop.h);
+                                lastSamPrediction = sam.infer(*frame, crop, camera);
+                                lastInferenceHost = frame->host;
+                                inferenceMs = (now() - begin) * 1000;
+                                lastMeasuredInferenceMs = inferenceMs;
+                            }
+                            if (lastSamPrediction) {
+                                samOverlay=kinectImageLabels(sam3dLandmarks(*lastSamPrediction));
+                                auto evidence=sam3dEvidence(*frame, id, *lastSamPrediction, camera);
+                                keypoints=evidence.keypoints; learned=evidence.prior;
+                            }
                         }
-                    } else keypoints = kinectImageLabels(model.infer(*frame, *lastCrop));
-                    inferenceMs = (now() - begin) * 1000;
+                    } else {
+                        keypoints = kinectImageLabels(model.infer(*frame, *lastCrop));
+                        inferenceMs = (now() - begin) * 1000;
+                        lastMeasuredInferenceMs = inferenceMs;
+                    }
                 } catch (const std::exception &e) {
                     message(e.what());
                 }
@@ -595,6 +664,11 @@ void Engine::processLoop() {
             view_.frame = frame;
             view_.state = state;
             view_.samOverlay=samOverlay;
+            std::string cadenceDesc = cadence == 1 ? "Full (30 Hz)" :
+                                      cadence == 2 ? "Balanced (20 Hz)" :
+                                      cadence == 3 ? "Low GPU (15 Hz)" :
+                                      (autoThrottleRemaining > 0 ? "Auto (throttled 15 Hz)" : "Auto (30 Hz)");
+            view_.cadenceStatus = cadenceDesc;
             view_.poseSource=(sam.ready() || nlf.ready())?(learned && std::any_of(state.learnedPosition.begin(),state.learnedPosition.end(),[](bool b){return b;})?
                 (learned->vrAnchored?poseName+" body + gentle horizontal correction":learned->depthPredicted?poseName+" body / distance estimated ("+std::to_string(int(learned->depthAge*1000))+" ms)":
                 poseName+" body + depth ("+std::to_string(learned->rootAnchors)+" supports)"):
@@ -602,7 +676,7 @@ void Engine::processLoop() {
                 (!config.settings.inference || !config.settings.depth)?poseName+" pose disabled in settings":
                 "SDK fallback: "+poseName+" depth anchor unavailable"):"";
             view_.lengths = estimator.lengths();
-            view_.inferenceMs = inferenceMs;
+            view_.inferenceMs = lastMeasuredInferenceMs;
             view_.queueMs = config.replay ? 0 : std::max(0.0, (begin - frame->arrival) * 1000);
             view_.arrivalToEstimateMs = config.replay ? 0 : (now() - frame->arrival) * 1000;
             ++view_.frames;

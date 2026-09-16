@@ -38,7 +38,10 @@ inline BridgePacket trackerPacket(const State& state,const Calibration& cal,cons
         auto p=cameraToRaw.apply(t.p);
         auto q=normalized(cameraToRaw.q*t.q);
         auto v=cameraToRaw.q.rotate(bounded(t.velocity,4));
-        if(time-state.host>.04)v={}; // no unbounded prediction of held poses.
+        if(time-state.host>.04) {
+            double decay=std::clamp(1.0-(time-state.host-.04)/.05,0.0,1.0);
+            v=v*decay;
+        }
         out.position[0]=p.x;out.position[1]=p.y;out.position[2]=p.z;
         out.rotation[0]=q.w;out.rotation[1]=q.x;out.rotation[2]=q.y;out.rotation[3]=q.z;
         out.velocity[0]=v.x;out.velocity[1]=v.y;out.velocity[2]=v.z;

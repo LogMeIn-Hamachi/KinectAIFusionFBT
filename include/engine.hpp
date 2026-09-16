@@ -11,6 +11,8 @@ struct View {
     std::optional<Keypoints> samOverlay;
     std::string poseSource;
     int modelChoice{}; // 0 SAM original, 1 NLF-S, 2 SAM FP8, 3 SAM optimized; stopped only.
+    int cadenceChoice{}; // 0 Auto (GPU adaptive), 1 Full (30 Hz), 2 Balanced (20 Hz), 3 Low GPU (15 Hz)
+    std::string cadenceStatus{"Auto (30 Hz)"};
     bool prefer30{true};
     std::string exposureStatus;
     Calibration calibration;
@@ -79,6 +81,7 @@ class Engine {
     void bodyCalibration();
     void settings(Settings);
     void chooseModel(int);
+    void chooseCadence(int);
     void chooseExposure(bool prefer30);
     void exportDiagnostics();
     std::filesystem::path root() const { return root_; }
