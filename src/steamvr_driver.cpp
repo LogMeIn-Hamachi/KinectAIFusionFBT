@@ -12,6 +12,11 @@ class Device final:public vr::ITrackedDeviceServerDriver {
     kf::V3 currentPos_{};
     kf::V3 currentVel_{};
     kf::Q currentRot_{1, 0, 0, 0};
+    kf::V3 currentAngVel_{};
+    kf::V3 errorOffsetPos_{};
+    kf::Q errorOffsetRot_{1, 0, 0, 0};
+    double errorStartTime_{0};
+    double lastPacketPublished_{0};
     double lastTime_{0};
     bool initialized_{false};
 public:
@@ -54,28 +59,59 @@ public:
             kf::V3 targetPos{in.position[0],in.position[1],in.position[2]};
             kf::Q targetRot{in.rotation[0],in.rotation[1],in.rotation[2],in.rotation[3]};
             kf::V3 targetVel{in.velocity[0],in.velocity[1],in.velocity[2]};
+            kf::V3 targetAngVel{in.angularVelocity[0],in.angularVelocity[1],in.angularVelocity[2]};
+
+            auto angDelta=[](kf::V3 w,double dt) -> kf::Q {
+                double speed=kf::norm(w);
+                if(speed<1e-6 || dt<=0.0)return {1,0,0,0};
+                return kf::axisAngle(w/speed,speed*dt);
+            };
+
             if(!initialized_ || time-lastTime_>0.25 || time<lastTime_) {
                 currentPos_=targetPos;
                 currentVel_=targetVel;
                 currentRot_=targetRot;
+                currentAngVel_=targetAngVel;
+                errorOffsetPos_={};
+                errorOffsetRot_={1,0,0,0};
+                errorStartTime_=time;
+                lastPacketPublished_=packet.published;
                 initialized_=true;
             } else {
-                double dt=std::clamp(time-lastTime_,0.001,0.050);
-                // Critically damped spring (smooth damp) for position.
-                // 28 ms smooth time eliminates low-FPS stepping and overshoot snap-backs,
-                // gliding smoothly at 90Hz/120Hz/144Hz with imperceptible latency (~15 ms).
-                double smoothTime=0.028;
-                double omega=2.0/smoothTime;
-                double x=omega*dt;
-                double expTerm=1.0/(1.0+x+0.48*x*x+0.235*x*x*x);
-                kf::V3 change=currentPos_-targetPos;
-                kf::V3 temp=(currentVel_+change*omega)*dt;
-                currentVel_=(currentVel_-temp*omega)*expTerm;
-                currentPos_=targetPos+(change+temp)*expTerm;
+                // When a fresh packet arrives from the engine, capture the prediction discrepancy
+                // between our previous trajectory and the new target.
+                if(packet.published>lastPacketPublished_+1e-5) {
+                    double dtPacket=std::clamp(time-packet.published,0.0,0.10);
+                    kf::V3 predictedNewPos=targetPos+targetVel*dtPacket;
+                    kf::Q predictedNewRot=kf::normalized(angDelta(targetAngVel,dtPacket)*targetRot);
 
-                // Continuous quaternion blend for rotation (28 ms time constant).
-                double rotAlpha=1.0-std::exp(-dt/0.028);
-                currentRot_=kf::blend(currentRot_,targetRot,rotAlpha);
+                    kf::V3 rawError=currentPos_-predictedNewPos;
+                    if(kf::norm(rawError)<0.25) {
+                        errorOffsetPos_=rawError;
+                        errorOffsetRot_=kf::continuous(currentRot_,predictedNewRot)*predictedNewRot.conjugate();
+                        errorStartTime_=time;
+                    } else {
+                        errorOffsetPos_={};
+                        errorOffsetRot_={1,0,0,0};
+                    }
+                    lastPacketPublished_=packet.published;
+                }
+
+                // Linear dead-reckoning: advance continuously along target velocity.
+                double dtFromPub=std::clamp(time-packet.published,0.0,0.10);
+                kf::V3 linearPos=targetPos+targetVel*dtFromPub;
+                kf::Q linearRot=kf::normalized(angDelta(targetAngVel,dtFromPub)*targetRot);
+
+                // Smooth Hermite blend to dissolve error offset over 40 ms (zero jump, zero rubber-banding).
+                constexpr double blendWindow=0.040;
+                double elapsed=time-errorStartTime_;
+                double decay=(elapsed>=0.0 && elapsed<blendWindow)?(1.0-elapsed/blendWindow):0.0;
+                double smoothDecay=decay*decay*(3.0-2.0*decay);
+
+                currentPos_=linearPos+errorOffsetPos_*smoothDecay;
+                currentRot_=kf::normalized(kf::blend(linearRot,errorOffsetRot_*linearRot,smoothDecay));
+                currentVel_=targetVel;
+                currentAngVel_=targetAngVel;
             }
             lastTime_=time;
 
@@ -83,6 +119,7 @@ public:
             p.vecPosition[0]=currentPos_.x;p.vecPosition[1]=currentPos_.y;p.vecPosition[2]=currentPos_.z;
             p.vecVelocity[0]=currentVel_.x;p.vecVelocity[1]=currentVel_.y;p.vecVelocity[2]=currentVel_.z;
             p.qRotation={currentRot_.w,currentRot_.x,currentRot_.y,currentRot_.z};
+            p.vecAngularVelocity[0]=currentAngVel_.x;p.vecAngularVelocity[1]=currentAngVel_.y;p.vecAngularVelocity[2]=currentAngVel_.z;
         } else {
             initialized_=false;
         }

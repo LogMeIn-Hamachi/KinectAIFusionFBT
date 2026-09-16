@@ -32,8 +32,11 @@ inline BridgePacket trackerPacket(const State& state,const Calibration& cal,cons
     if(!enabled || !cal.valid || !trackingReferenceValid(cal,vr))return packet;
     auto delivery=deliveryState(state,time);packet.enabled=1;
     const auto cameraToRaw=composeRigid(cal.standingToRaw,cal.transform);
+    const double age=std::max(0.0,time-state.host);
+    const double extraDt=std::clamp(age-.04,0.0,0.06);
     for(int i=0;i<3;++i) {
         auto t=delivery.trackers[i];auto& out=packet.poses[i];
+        if(t.valid && extraDt>0)t.p+=bounded(t.velocity,4)*extraDt;
         // SteamVR is right-handed. The OSC/Unity Z reflection does not belong here.
         // Fixed physical reference: SteamVR applies the live playspace offset.
         // Using the current inverse here cancels OVR movement for our trackers.
@@ -41,7 +44,7 @@ inline BridgePacket trackerPacket(const State& state,const Calibration& cal,cons
         auto q=normalized(cameraToRaw.q*t.q);
         auto v=cameraToRaw.q.rotate(bounded(t.velocity,4));
         auto w=cameraToRaw.q.rotate(bounded(t.angularVelocity,20));
-        if(time-state.host>.04)v={};
+        if(age>.10)v={};
         out.position[0]=p.x;out.position[1]=p.y;out.position[2]=p.z;
         out.rotation[0]=q.w;out.rotation[1]=q.x;out.rotation[2]=q.y;out.rotation[3]=q.z;
         out.velocity[0]=v.x;out.velocity[1]=v.y;out.velocity[2]=v.z;
