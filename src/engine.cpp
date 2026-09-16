@@ -3,11 +3,13 @@
 #include "nlf_model.hpp"
 #include "body_tracker.hpp"
 #include "steamvr_bridge.hpp"
+#include "vr_overlay.hpp"
 #include <timeapi.h>
 #include <iomanip>
 #include <sstream>
 namespace kf {
 Engine::Engine(std::filesystem::path root) : root_(std::move(root)) {
+    overlay_ = std::make_unique<VrOverlay>();
     view_.modelChoice=std::filesystem::exists(root_/"assets/sam3d-optimized/backbone.onnx")?3:
         (std::filesystem::exists(root_/"assets/sam3d-fp8/backbone.onnx")?2:
         (std::filesystem::exists(root_/"assets/nlf/pose.onnx")?1:0));
@@ -99,6 +101,7 @@ void Engine::stop() {
     view_.collecting = false;
     view_.sensor = "Stopped";
     view_.tiltAngle.reset();view_.tiltPending=false;tiltTarget_.reset();
+    if (overlay_) overlay_->hide();
 }
 void Engine::select(uint32_t id) {
     selection_ = id;
@@ -184,6 +187,7 @@ void Engine::cancelCalibration() {
     if(!view_.collecting)return;
     view_.collecting=false;view_.calibration.valid=false;view_.output=false;
     view_.notice="Alignment cancelled. Saved alignment and earlier device offsets were not overwritten.";
+    if (overlay_) overlay_->hide();
 }
 void Engine::tilt(int direction) {
     std::lock_guard l(mutex_);
@@ -796,10 +800,42 @@ void Engine::outputLoop() {
             }else status=s.steamVrOutput?(bridge.driverReady()?"SteamVR driver ready - output paused":"SteamVR driver not running - restart SteamVR after installation"):"OSC output paused";
         }
         {std::lock_guard l(mutex_);view_.outputStatus=status;}
+        if (overlay_) {
+            OverlayState os;
+            double nowTime = now();
+            if (s.collecting) {
+                lastCalibrationActive_ = nowTime;
+                auto cue = alignment_.cue(nowTime);
+                os.active = true;
+                os.step = cue.step;
+                os.secondsRemaining = cue.seconds;
+                os.waitingForReady = cue.waitingForReady;
+                os.collecting = cue.collecting;
+                os.instruction = cue.instruction;
+                os.feedback = s.calibrationDetail;
+                if (s.frame) {
+                    os.leftTracked = s.frame->vr.devices[1].valid;
+                    os.rightTracked = s.frame->vr.devices[2].valid;
+                    os.leftTrigger = s.frame->vr.triggerPressed[0];
+                    os.rightTrigger = s.frame->vr.triggerPressed[1];
+                }
+                overlay_->update(os);
+            } else if (lastCalibrationActive_ > 0 && nowTime - lastCalibrationActive_ < 3.5 && s.wristOffsetsReady) {
+                os.active = true;
+                os.done = true;
+                os.success = true;
+                os.agreement = s.calibrationDetail;
+                overlay_->update(os);
+            } else {
+                lastCalibrationActive_ = 0;
+                overlay_->hide();
+            }
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(8));
     }
     if(claimed){BridgePacket off;off.published=now();bool ready;bridge.publish(off,ready);ReleaseMutex(writer);}
     if(writer)CloseHandle(writer);
+    if (overlay_) overlay_->hide();
     timeEndPeriod(1);
 }
 void Engine::recordLoop() {

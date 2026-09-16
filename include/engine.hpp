@@ -38,6 +38,7 @@ struct View {
     bool tiltPending{};
     double tiltWait{};
 };
+class VrOverlay;
 class Engine {
     std::filesystem::path root_;
     std::filesystem::path calibrationFile_;
@@ -57,6 +58,8 @@ class Engine {
     bool useGpu_{true};
     TiltLimiter tiltLimiter_;
     std::optional<int> tiltTarget_;
+    std::unique_ptr<VrOverlay> overlay_;
+    double lastCalibrationActive_{0};
     void captureLoop(std::filesystem::path replay);
     void processLoop();
     void outputLoop();
