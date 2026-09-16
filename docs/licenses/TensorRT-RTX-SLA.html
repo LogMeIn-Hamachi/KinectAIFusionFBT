@@ -1,0 +1,905 @@
+
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>NVIDIA SOFTWARE LICENSE AGREEMENT &#8212; NVIDIA TensorRT for RTX</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=7f76b32a3354e82990f2" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=7f76b32a3354e82990f2" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/nvidia-sphinx-theme.css?v=933278ad" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=767de534" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=7f76b32a3354e82990f2"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=7f76b32a3354e82990f2" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=7f76b32a3354e82990f2" />
+
+
+<script src="https://cdn.cookielaw.org/scripttemplates/otSDKStub.js" type="text/javascript"
+  data-document-language="true" charset="UTF-8" data-domain-script="3e2b62ff-7ae7-4ac5-87c8-d5949ecafff5">
+</script>
+<script type="text/javascript">
+  function OptanonWrapper() {
+    var event = new Event('bannerLoaded');
+    window.dispatchEvent(event);
+  }
+</script>
+<script src="https://images.nvidia.com/aem-dam/Solutions/ot-js/ot-custom.js" type="text/javascript">
+</script>
+
+
+    <script rel="preload" src="../_static/modal-table.js"></script>
+    <script src="../_static/documentation_options.js?v=a9530b0a"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/external-links.js"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=65e89d2a"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'reference/sla';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <script src="../_static/version-patch.js?v=3e13fdd2"></script>
+
+<script type="text/javascript" src="https://assets.adobedtm.com/5d4962a43b79/c1061d2c5e7b/launch-191c2462b890.min.js"></script>
+
+    <link rel="icon" href="../_static/favicon.ico"/>
+
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="prev" title="Cybersecurity Disclosures" href="cybersecurity-disclosures.html" />
+
+<link rel="preload" as="image" href="https://www.nvidia.com/content/dam/1x1-00000000.png">
+
+
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+    <meta name="docbuild:last-update" content="Jul 27, 2026"/>
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+
+    <meta name="docs_products" content="NVIDIA TensorRT for RTX">
+    <meta name="docs_version" content="1.6">
+    <meta name="docs_books" content="NVIDIA TensorRT for RTX 1.6">
+    
+
+
+  </head>
+
+  <body data-default-mode="">
+
+<img src="https://www.nvidia.com/content/dam/1x1-00000000.png" width="1" height="1" style="display:none;" alt="country_code">
+
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../_static/nvidia-logo-horiz-rgb-blk-for-screen.svg" class="logo__image only-light" alt="NVIDIA TensorRT for RTX - Home"/>
+    <img src="../_static/nvidia-logo-horiz-rgb-wht-for-screen.svg" class="logo__image only-dark pst-js-only" alt="NVIDIA TensorRT for RTX - Home"/>
+  
+  
+    <p class="title logo__title">NVIDIA TensorRT for RTX</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+
+
+<div>
+  <ul class="bd-navbar-elements navbar-nav">
+  
+    <li class="nav-item pst-header-nav-item">
+      
+      <a class="nav-link nav-external" href="https://docs.nvidia.com/tensorrt/">Documentation Home</a>
+      
+    </li>
+  
+  </ul>
+</div>
+</div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../_static/nvidia-logo-horiz-rgb-blk-for-screen.svg" class="logo__image only-light" alt="NVIDIA TensorRT for RTX - Home"/>
+    <img src="../_static/nvidia-logo-horiz-rgb-wht-for-screen.svg" class="logo__image only-dark pst-js-only" alt="NVIDIA TensorRT for RTX - Home"/>
+  
+  
+    <p class="title logo__title">NVIDIA TensorRT for RTX</p>
+  
+</a>
+
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+
+
+<div>
+  <ul class="bd-navbar-elements navbar-nav">
+  
+    <li class="nav-item pst-header-nav-item">
+      
+      <a class="nav-link nav-external" href="https://docs.nvidia.com/tensorrt/">Documentation Home</a>
+      
+    </li>
+  
+  </ul>
+</div>
+</div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Table of Contents">
+  <p class="bd-links__title" role="heading" aria-level="1">Table of Contents</p>
+  <div class="bd-toc-item navbar-nav"><p aria-level="2" class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../getting-started/release-notes.html">Release Notes</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../getting-started/release-notes-1/1.6.html">1.6 (Latest)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../getting-started/release-notes-1/1.5.html">1.5</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../getting-started/release-notes-1/1.4.html">1.4</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../getting-started/release-notes-1/1.3.html">1.3</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../getting-started/release-notes-1/1.2.html">1.2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../getting-started/release-notes-1/1.1.html">1.1</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../getting-started/release-notes-1/1.0.html">1.0</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting-started/quick-start-guide.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting-started/build-your-first-engine.html">Build Your First Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting-started/support-matrix.html">Support Matrix</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Installing TensorRT-RTX</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../installing-tensorrt-rtx/installation-overview.html">Installation Guide Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../installing-tensorrt-rtx/prerequisites.html">Prerequisites</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../installing-tensorrt-rtx/installing.html">Installing TensorRT-RTX</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../installing-tensorrt-rtx/onnx-conversion.html">ONNX Conversion Guide</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Architecture</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../architecture/architecture-overview.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/how-trt-rtx-works.html">How TensorRT-RTX Works</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Inference Library</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../inference-library/index.html">Inference Library Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../inference-library/runtime-api.html">Using the Native Runtime API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../inference-library/c-api-docs.html">C++ API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../inference-library/python-api-docs.html">Python API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../inference-library/torch-trt-rtx.html">Using TensorRT-RTX via PyTorch</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../inference-library/advanced.html">Advanced Topics</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../inference-library/engine-compatibility.html">Engine Compatibility</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../inference-library/refitting-engines.html">Refitting Engines</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../inference-library/timing-cache-migration.html">Timing Cache Migration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../inference-library/weight-streaming.html">Weight Streaming</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../inference-library/work-with-quantized-types.html">Work With Quantized Types</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../inference-library/work-with-dynamic-shapes.html">Working with Dynamic Shapes</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../inference-library/dynamic-shapes-basics.html">Dynamic Shapes: Core Concepts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../inference-library/dynamic-shapes-advanced.html">Dynamic Shapes: Advanced Topics</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../inference-library/work-with-runtime-cache.html">Working with Runtime Cache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../inference-library/work-with-cuda-graphs.html">Working with RTX CUDA Graphs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../inference-library/compute-graphics.html">Simultaneous Compute and Graphics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../inference-library/cpu-engines.html">CPU-Only AOT and TensorRT-RTX Engines</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../inference-library/porting.html">Porting Guide for TensorRT Applications</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../inference-library/capture-replay.html">TensorRT-RTX API Capture and Replay</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../performance/best-practices.html">Best Practices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../performance/benchmarking.html">Performance Benchmarking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../performance/optimization.html">Optimizing TensorRT-RTX Performance</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">API</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../api/c-api.html">C++ API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/python-api.html">Python API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/operators.html">TensorRT-RTX Operators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/onnx-graphsurgeon-api.html">ONNX GraphSurgeon API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/polygraphy-api.html">Polygraphy API</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cybersecurity-disclosures.html">Cybersecurity Disclosures</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">NVIDIA SOFTWARE LICENSE AGREEMENT</a></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">NVIDIA SOFTWARE LICENSE AGREEMENT</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+<div class="header-article-item">
+  <div class="d-flex justify-content-end w-100">
+    <a href="https://surveys.hotjar.com/4904bf71-6484-47a7-83ff-4715cceabdb5" id="openPopupButton">Is this page helpful?</a>
+  </div>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="nvidia-software-license-agreement">
+<span id="sla"></span><h1>NVIDIA SOFTWARE LICENSE AGREEMENT<a class="headerlink" href="#nvidia-software-license-agreement" title="Link to this heading">#</a></h1>
+<p>IMPORTANT NOTICE – PLEASE READ AND AGREE BEFORE USING THE SOFTWARE</p>
+<p>This software license agreement (“Agreement”) is a legal agreement between you, whether an individual or entity, (“you”) and NVIDIA Corporation (“NVIDIA”) and governs the use of the NVIDIA TensorRT for RTX software and materials that NVIDIA delivers to you under this Agreement (“Software”). NVIDIA and you are each a “party” and collectively the “parties.”</p>
+<p>This Agreement can be accepted only by an adult of legal age of majority in the country in which the Software is used.</p>
+<p>If you don’t have the required age or authority to accept this Agreement, or if you don’t accept all the terms and conditions of this Agreement, do not use the Software.</p>
+<section id="license-grants">
+<h2>1. License Grants.<a class="headerlink" href="#license-grants" title="Link to this heading">#</a></h2>
+<p>1.1 .. raw:: html</p>
+<blockquote>
+<div><p>&lt;u&gt;License Grant to You.&lt;/u&gt;</p>
+</div></blockquote>
+<p>The Software made available by NVIDIA to you is licensed, not sold. Subject to the terms of this Agreement, NVIDIA grants you a limited, non-exclusive, revocable, non-transferable, and non-sublicensable (except as expressly granted in this Agreement), license to:</p>
+<ol class="arabic simple">
+<li><p>install and use copies of the Software,</p></li>
+<li><p>configure the Software using configuration files provided (if applicable),</p></li>
+<li><p>modify and create derivative works of any sample or example source code NVIDIA delivers to you as part of the Software (“Derivatives”) (if applicable), and</p></li>
+<li><p>distribute the Software as incorporated into a software application subject to the following distribution requirements:</p>
+<ol class="arabic simple">
+<li><p>Your application must have material additional functionality, beyond the included portions of the Software.</p></li>
+<li><p>The distributable portions of the Software shall only be accessed by your application.</p></li>
+<li><p>The following notice shall be included in modifications and derivative works of sample source code distributed: “This software contains source code provided by NVIDIA Corporation.”</p></li>
+<li><p>Unless a developer tool is identified in this Agreement as distributable, it is delivered for your internal use only.</p></li>
+<li><p>The terms under which you distribute your application must be consistent with the terms of this Agreement, including (without limitation) terms relating to the license grant and license restrictions and protection of NVIDIA’s intellectual property rights. Additionally, you agree that you will protect the privacy, security and legal rights of your application users.</p></li>
+</ol>
+</li>
+</ol>
+<p>The foregoing (a) through (d) are, collectively, the “Purpose”, and the Software is licensed for you to develop applications only for use in systems with NVIDIA GPU.</p>
+<p>1.2 .. raw:: html</p>
+<blockquote>
+<div><p>&lt;u&gt;License Grant to NVIDIA.&lt;/u&gt;</p>
+</div></blockquote>
+<p>Subject to the terms of this Agreement, you grant NVIDIA and its affiliates a non-exclusive, perpetual, irrevocable, sublicensable, worldwide, royalty-free, fully paid-up and transferable license, under your intellectual property rights, to publicly perform, publicly display, reproduce, use, make, have made, sell, offer for sale, distribute (through multiple tiers of distribution), import, create derivative works of and otherwise commercialize and exploit at NVIDIA’s discretion any Derivatives created by or for you. You may, but are not required to, deliver any Derivatives to NVIDIA</p>
+</section>
+<section id="license-restrictions">
+<h2>2. License Restrictions.<a class="headerlink" href="#license-restrictions" title="Link to this heading">#</a></h2>
+<p>Your license to use the Software and Derivatives is restricted as stated in this Section 2 (“License Restrictions”). You will cooperate with NVIDIA and, upon NVIDIA’s written request, you will confirm in writing and provide reasonably requested information to verify your compliance with the terms of this Agreement. You may not:</p>
+<p>2.1 Use the Software or Derivatives for any purpose other than the Purpose;</p>
+<p>2.2 Sell, rent, sublicense, transfer, distribute or otherwise make available to others (except authorized users as stated in Section 3 (“Authorized Users”)) any portion of the Software or Derivatives, except as expressly granted in Section 1.1 (“License Grant to You”);</p>
+<p>2.3 Reverse engineer, decompile, or disassemble the Software components provided in binary form, nor attempt in any other manner to obtain source code of such Software;</p>
+<p>2.4 Modify or create derivative works of the Software, except as expressly granted in Section 1.1 (“License Grant to You”);</p>
+<p>2.5 Change or remove copyright or other proprietary notices in the Software;</p>
+<p>2.6 Bypass, disable, or circumvent any technical limitation, encryption, security, digital rights management or authentication mechanism in the Software;</p>
+<p>2.7 Use the Software or Derivatives in any manner that would cause them to become subject to an open source software license, subject to the terms in Section 6 (“Components Under Other Licenses”);</p>
+<p>2.8 Use the Software or Derivatives in violation of any applicable law or regulation in relevant jurisdictions</p>
+<p>2.9 Use the Software or Derivatives for the purpose of developing competing products or technologies or assist a third party in such activities;</p>
+<p>2.10 Indicate that a product or service developed with the Software or Derivatives is sponsored or endorsed by NVIDIA;</p>
+<p>2.11 Replace any NVIDIA software components in the Software that are governed by this Agreement with other software that implements NVIDIA APIs;</p>
+<p>2.12 Reverse engineer, decompile or disassemble any portion of the output generated using Software elements for the purpose of translating such output artifacts to target a non-NVIDIA platform; or</p>
+<p>2.13 Distribute or disclose to third parties the output of the Software where the output reveals functionality or performance data pertinent to NVIDIA hardware or software products, results of benchmarking, competitive analysis, or regression or performance data relating to the Software or NVIDIA GPUs without the prior written permission from NVIDIA.</p>
+</section>
+<section id="authorized-users">
+<h2>3. Authorized Users.<a class="headerlink" href="#authorized-users" title="Link to this heading">#</a></h2>
+<p>You may allow employees and contractors of your entity or of your subsidiary(ies), and for educational institutions also enrolled students, to internally access and use the Software as authorized by this Agreement from your secure network to perform the work authorized by this Agreement on your behalf. You are responsible for the compliance with the terms of this Agreement by your authorized users. Any act or omission that if committed by you would constitute a breach of this Agreement will be deemed to constitute a breach of this Agreement if committed by your authorized users.</p>
+</section>
+<section id="pre-release">
+<h2>4. Pre-Release.<a class="headerlink" href="#pre-release" title="Link to this heading">#</a></h2>
+<p>Software versions identified as alpha, beta, preview, early access or otherwise as pre-release (“Pre-Release”) may not be fully functional, may contain errors or design flaws, and may have reduced or different security, privacy, availability and reliability standards relative to NVIDIA commercial offerings. You use Pre-Release Software at your own risk. NVIDIA did not design or test the Software for use in production or business-critical systems. NVIDIA may choose not to make available a commercial version of Pre-Release Software. NVIDIA may also choose to abandon development and terminate the availability of Pre-Release Software at any time without liability.</p>
+</section>
+<section id="updates">
+<h2>5. Updates.<a class="headerlink" href="#updates" title="Link to this heading">#</a></h2>
+<p>NVIDIA may at any time and at its option, change, discontinue, or deprecate any part, or all, of the Software, or change or remove features or functionality, or make available patches, workarounds or other updates to the Software. Unless the updates are provided with their separate governing terms, they are deemed part of the Software licensed to you under this Agreement, and your continued use of the Software is deemed acceptance of such changes.</p>
+</section>
+<section id="components-under-other-licenses">
+<h2>6. Components Under Other Licenses.<a class="headerlink" href="#components-under-other-licenses" title="Link to this heading">#</a></h2>
+<p>The Software may include or be distributed with components provided with separate legal notices or terms that accompany the components, such as open source software licenses and other license terms (“Other Licenses”). The components are subject to the applicable Other Licenses, including any proprietary notices, disclaimers, requirements and extended use rights; except that this Agreement will prevail regarding the use of third-party open source software, unless a third-party open source software license requires its license terms to prevail. Open source software license means any software, data or documentation subject to any license identified as an open source license by the Open Source Initiative (<a class="reference external" href="http://opensource.org">http://opensource.org</a>), Free Software Foundation (<a class="reference external" href="http://www.fsf.org">http://www.fsf.org</a>) or other similar open source organization or listed by the Software Package Data Exchange (SPDX) Workgroup under the Linux Foundation (<a class="reference external" href="http://www.spdx.org">http://www.spdx.org</a>).</p>
+</section>
+<section id="ownership">
+<h2>7. Ownership.<a class="headerlink" href="#ownership" title="Link to this heading">#</a></h2>
+<p>7.1 .. raw:: html</p>
+<blockquote>
+<div><p>&lt;u&gt;NVIDIA Ownership.&lt;/u&gt;</p>
+</div></blockquote>
+<p>The Software, including all intellectual property rights, is and will remain the sole and exclusive property of NVIDIA or its licensors. Except as expressly granted in this Agreement, (a) NVIDIA reserves all rights, interests and remedies in connection with the Software, and (b) no other license or right is granted to you by implication, estoppel or otherwise.</p>
+<p>7.2 .. raw:: html</p>
+<blockquote>
+<div><p>&lt;u&gt;Your Ownership.&lt;/u&gt;</p>
+</div></blockquote>
+<p>Subject to the rights of NVIDIA and its suppliers in the Software, which continue to be licensed as stated in this Agreement, even when incorporated in your products or services, and the extent permitted by applicable law, as between you and NVIDIA, you hold all rights, title and interest in and to your products, services and Derivatives you develop as permitted in this Agreement including their respective intellectual property rights.</p>
+</section>
+<section id="feedback">
+<h2>8. Feedback.<a class="headerlink" href="#feedback" title="Link to this heading">#</a></h2>
+<p>You may, but you are not obligated to, provide suggestions, requests, fixes, modifications, enhancements, or other feedback regarding the Software (collectively, “Feedback”). Feedback, even if designated as confidential by you, will not create any confidentiality obligation for NVIDIA or its affiliates. If you provide Feedback, you grant NVIDIA, its affiliates and its designees a non-exclusive, perpetual, irrevocable, sublicensable, worldwide, royalty-free, fully paid-up and transferable license, under your intellectual property rights, to publicly perform, publicly display, reproduce, use, make, have made, sell, offer for sale, distribute (through multiple tiers of distribution), import, create derivative works of and otherwise commercialize and exploit the Feedback at NVIDIA’s discretion.</p>
+</section>
+<section id="termination">
+<h2>9. Termination.<a class="headerlink" href="#termination" title="Link to this heading">#</a></h2>
+<p>9.1 .. raw:: html</p>
+<blockquote>
+<div><p>&lt;u&gt;Termination.&lt;/u&gt;</p>
+</div></blockquote>
+<p>This Agreement will automatically terminate without notice from NVIDIA if you fail to comply with any of
+the terms in this Agreement or if you commence or participate in any legal proceeding against NVIDIA with respect to
+the Software. Additionally, either party may terminate this Agreement at any time with thirty (30) days’ advance
+written notice to the other party.</p>
+<p>9.2 .. raw:: html</p>
+<blockquote>
+<div><p>&lt;u&gt;Effect of Termination.&lt;/u&gt;</p>
+</div></blockquote>
+<p>Upon any expiration or termination of this Agreement, you will promptly (a) stop using and
+return, delete or destroy NVIDIA confidential information and all Software received under this Agreement, and
+(b) delete or destroy Derivatives created under this Agreement, unless an authorized NVIDIA representative provides
+prior written approval that you may keep a copy of the Derivatives solely for archival purposes. Upon written request,
+you will certify in writing that you have complied with your obligations under this Section 9.2 (“Effect of Termination”).</p>
+<p>9.3 .. raw:: html</p>
+<blockquote>
+<div><p>&lt;u&gt;Survival.&lt;/u&gt;</p>
+</div></blockquote>
+<p>Section 1.2 (“License Grant to NVIDIA”), Section 5 (“Updates”), Section 6 (“Components Under Other
+Licenses”), Section 7 (“Ownership”), Section 8 (“Feedback”), Section 9.2 (“Effect of Termination”), Section 9.3
+(“Survival”), Section 10 (“Disclaimer of Warranties”), Section 11 (“Limitation of Liability”), Section 12 (“Use in Mission
+Critical Applications”), Section 13 (“Governing Law and Jurisdiction”), Section 14 (“Indemnity”) and Section 15
+(“General”) will survive any expiration or termination of this Agreement.</p>
+</section>
+<section id="disclaimer-of-warranties">
+<h2>10. Disclaimer of Warranties.<a class="headerlink" href="#disclaimer-of-warranties" title="Link to this heading">#</a></h2>
+<p>THE SOFTWARE IS PROVIDED BY NVIDIA AS-IS AND WITH ALL FAULTS. TO THE MAXIMUM EXTENT
+PERMITTED BY APPLICABLE LAW, NVIDIA DISCLAIMS ALL WARRANTIES AND REPRESENTATIONS OF ANY KIND, WHETHER
+EXPRESS, IMPLIED OR STATUTORY, RELATING TO OR ARISING UNDER THIS AGREEMENT, INCLUDING, WITHOUT LIMITATION,
+THE WARRANTIES OF TITLE, NONINFRINGEMENT, MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, USAGE OF TRADE
+AND COURSE OF DEALING. NVIDIA DOES NOT WARRANT OR ASSUME RESPONSIBILITY FOR THE ACCURACY OR COMPLETENESS
+OF ANY THIRD-PARTY INFORMATION, TEXT, GRAPHICS, LINKS CONTAINED IN THE SOFTWARE. WITHOUT LIMITING THE
+FOREGOING, NVIDIA DOES NOT WARRANT THAT THE SOFTWARE WILL MEET YOUR REQUIREMENTS, ANY DEFECTS OR ERRORS
+WILL BE CORRECTED, ANY CERTAIN CONTENT WILL BE AVAILABLE; OR THAT THE SOFTWARE IS FREE OF VIRUSES OR OTHER
+HARMFUL COMPONENTS. NO INFORMATION OR ADVICE GIVEN BY NVIDIA WILL IN ANY WAY INCREASE THE SCOPE OF ANY
+WARRANTY EXPRESSLY PROVIDED IN THIS AGREEMENT. NVIDIA does not warrant or assume responsibility for the accuracy or
+completeness of any third-party information, text, graphics or links contained in the Software.</p>
+</section>
+<section id="limitations-of-liability">
+<h2>11. Limitations of Liability.<a class="headerlink" href="#limitations-of-liability" title="Link to this heading">#</a></h2>
+<p>11.1 .. raw:: html</p>
+<blockquote>
+<div><p>&lt;u&gt;EXCLUSIONS.&lt;/u&gt;</p>
+</div></blockquote>
+<p>TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT WILL NVIDIA BE LIABLE FOR
+ANY (I) INDIRECT, PUNITIVE, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES, OR (II) DAMAGES FOR (A) THE COST
+OF PROCURING SUBSTITUTE GOODS, OR (B) LOSS OF PROFITS, REVENUES, USE, DATA OR GOODWILL ARISING OUT OF
+OR RELATED TO THIS AGREEMENT, WHETHER BASED ON BREACH OF CONTRACT, TORT (INCLUDING NEGLIGENCE),
+STRICT LIABILITY, OR OTHERWISE, AND EVEN IF NVIDIA HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES
+AND EVEN IF A PARTY’S REMEDIES FAIL THEIR ESSENTIAL PURPOSE.</p>
+<p>11.2 .. raw:: html</p>
+<blockquote>
+<div><p>&lt;u&gt;DAMAGES CAP.&lt;/u&gt;</p>
+</div></blockquote>
+<p>ADDITIONALLY, TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, NVIDIA’S TOTAL
+CUMULATIVE AGGREGATE LIABILITY FOR ANY AND ALL LIABILITIES, OBLIGATIONS OR CLAIMS ARISING OUT OF OR
+RELATED TO THIS AGREEMENT WILL NOT EXCEED FIVE U.S. DOLLARS (US$5).</p>
+</section>
+<section id="use-in-mission-critical-applications">
+<h2>12. Use in Mission Critical Applications.<a class="headerlink" href="#use-in-mission-critical-applications" title="Link to this heading">#</a></h2>
+<p>You acknowledge that the Software provided under this Agreement is not designed or
+tested by NVIDIA for use in any system or application where the use or failure of such system or application developed with
+NVIDIA’s Software could result in injury, death or catastrophic damage (each, a “Mission Critical Application”). Examples of
+Mission Critical Applications include use in avionics, navigation, autonomous vehicle applications, AI solutions for automotive
+products, military, medical, life support or other mission-critical or life-critical applications. NVIDIA will not be liable to you or
+any third party, in whole or in part, for any claims or damages arising from these uses. You are solely responsible for ensuring
+that systems and applications developed with the Software include sufficient safety and redundancy features and comply with
+all applicable legal and regulatory standards and requirements.</p>
+</section>
+<section id="governing-law-and-jurisdiction">
+<h2>13. Governing Law and Jurisdiction.<a class="headerlink" href="#governing-law-and-jurisdiction" title="Link to this heading">#</a></h2>
+<p>This Agreement will be governed in all respects by the laws of the United States and the laws of
+the State of Delaware, without regard to conflict of laws principles or the United Nations Convention on Contracts for the
+International Sale of Goods. The state and federal courts residing in Santa Clara County, California will have exclusive jurisdiction
+over any dispute or claim arising out of or related to this Agreement, and the parties irrevocably consent to personal jurisdiction
+and venue in those courts; except that either party may apply for injunctive remedies or an equivalent type of urgent legal relief
+in any jurisdiction.</p>
+</section>
+<section id="indemnity">
+<h2>14. Indemnity.<a class="headerlink" href="#indemnity" title="Link to this heading">#</a></h2>
+<p>By using the Software you agree to defend, indemnify and hold harmless NVIDIA and its affiliates and their
+respective officers, directors, employees and agents from and against any claims, disputes, demands, liabilities, damages, losses,
+costs and expenses arising out of or in any way connected with (i) products or services that have been developed or deployed
+with or use the Software, or claims that they violate laws, or infringe, violate, or misappropriate any third party right; or (ii) use
+of the Software in breach of the terms of this Agreement.</p>
+</section>
+<section id="general">
+<h2>15. General.<a class="headerlink" href="#general" title="Link to this heading">#</a></h2>
+<p>15.1 .. raw:: html</p>
+<blockquote>
+<div><p>&lt;u&gt;Independent Contractors.&lt;/u&gt;</p>
+</div></blockquote>
+<p>The parties are independent contractors, and this Agreement does not create a joint venture,
+partnership, agency, or other form of business association between the parties. Neither party will have the power to
+bind the other party or incur any obligation on its behalf without the other party’s prior written consent. Nothing in this
+Agreement prevents either party from participating in similar arrangements with third parties.</p>
+<p>15.2 .. raw:: html</p>
+<blockquote>
+<div><p>&lt;u&gt;No Assignment.&lt;/u&gt;</p>
+</div></blockquote>
+<p>NVIDIA may assign, delegate or transfer its rights or obligations under this Agreement by any means or
+operation of law. You may not, without NVIDIA’s prior written consent, assign, delegate or transfer any of your rights or
+obligations under this Agreement by any means or operation of law, and any attempt to do so is null and void.</p>
+<p>15.3 .. raw:: html</p>
+<blockquote>
+<div><p>&lt;u&gt;No Waiver.&lt;/u&gt;</p>
+</div></blockquote>
+<p>No failure or delay by a party to enforce any term or obligation of this Agreement will operate as a waiver
+by that party, or prevent the enforcement of such term or obligation later.</p>
+<p>15.4 .. raw:: html</p>
+<blockquote>
+<div><p>&lt;u&gt;Trade Compliance.&lt;/u&gt;</p>
+</div></blockquote>
+<p>You agree to comply with all applicable export, import, trade and economic sanctions laws and
+regulations, as amended, including without limitation U.S. Export Administration Regulations and Office of Foreign
+Assets Control regulations. You confirm (a) your understanding that export or reexport of certain NVIDIA products or
+technologies may require a license or other approval from appropriate authorities and (b) that you will not export or
+reexport any products or technology, directly or indirectly, without first obtaining any required license or other
+approval from appropriate authorities, (i) to any countries that are subject to any U.S. or local export restrictions
+(currently including, but not necessarily limited to, Belarus, Cuba, Iran, North Korea, Russia, Syria, the Region of Crimea,
+Donetsk People’s Republic Region and Luhansk People’s Republic Region); (ii) to any end-user who you know or have
+reason to know will utilize them in the design, development or production of nuclear, chemical or biological weapons,
+missiles, rocket systems, unmanned air vehicles capable of a maximum range of at least 300 kilometers, regardless of
+payload, or intended for military end-use, or any weapons of mass destruction; (iii) to any end-user who has been
+prohibited from participating in the U.S. or local export transactions by any governing authority; or (iv) to any known
+military or military-intelligence end-user or for any known military or military-intelligence end-use in accordance with
+U.S. trade compliance laws and regulations.</p>
+<p>15.5 .. raw:: html</p>
+<blockquote>
+<div><p>&lt;u&gt;Government Rights.&lt;/u&gt;</p>
+</div></blockquote>
+<p>The Software, documentation and technology (“Protected Items”) are “Commercial products” as
+this term is defined at 48 C.F.R. 2.101, consisting of “commercial computer software” and “commercial computer
+software documentation” as such terms are used in, respectively, 48 C.F.R. 12.212 and 48 C.F.R. 227.7202 &amp; 252.227-
+7014(a)(1). Before any Protected Items are supplied to the U.S. Government, you will (i) inform the U.S. Government in
+writing that the Protected Items are and must be treated as commercial computer software and commercial computer
+software documentation developed at private expense; (ii) inform the U.S. Government that the Protected Items are
+provided subject to the terms of the Agreement; and (iii) mark the Protected Items as commercial computer software
+and commercial computer software documentation developed at private expense. In no event will you permit the U.S.
+Government to acquire rights in Protected Items beyond those specified in 48 C.F.R. 52.227-19(b)(1)-(2) or 252.227-
+7013(c) except as expressly approved by NVIDIA in writing.</p>
+<p>15.6 .. raw:: html</p>
+<blockquote>
+<div><p>&lt;u&gt;Notices.&lt;/u&gt;</p>
+</div></blockquote>
+<p>Please direct your legal notices or other correspondence to <cite>legalnotices&#64;nvidia.com &lt;legalnotices&#64;nvidia.com&gt;</cite> with a copy mailed to
+NVIDIA Corporation, 2788 San Tomas Expressway, Santa Clara, California 95051, United States of America, Attention:
+Legal Department. If NVIDIA needs to contact you, you consent to receive the notices by email and agree that such
+notices will satisfy any legal communication requirements.</p>
+<p>15.7 .. raw:: html</p>
+<blockquote>
+<div><p>&lt;u&gt;Severability.&lt;/u&gt;</p>
+</div></blockquote>
+<p>If a court of competent jurisdiction rules that a provision of this Agreement is unenforceable, that
+provision will be deemed modified to the extent necessary to make it enforceable and the remainder of this Agreement
+will continue in full force and effect.</p>
+<p>15.8 .. raw:: html</p>
+<blockquote>
+<div><p>&lt;u&gt;Amendment.&lt;/u&gt;</p>
+</div></blockquote>
+<p>Any amendment to this Agreement must be in writing and signed by authorized representatives of both
+parties.</p>
+<p>15.9 .. raw:: html</p>
+<blockquote>
+<div><p>&lt;u&gt;Construction.&lt;/u&gt;</p>
+</div></blockquote>
+<p>The headings in the Agreement are included solely for convenience and are not intended to affect the
+meaning or interpretation of the Agreement. As required by the context of the Agreement, the singular of a term
+includes the plural and vice versa.</p>
+<p>15.10 .. raw:: html</p>
+<blockquote>
+<div><p>&lt;u&gt;Force Majeure.&lt;/u&gt;</p>
+</div></blockquote>
+<p>Neither party will be liable during any period where an event or circumstance prevents or delays that
+party from performing its obligations under this Agreement and that event or circumstance: (i) is not within the
+reasonable control of that party and is not the result of that party’s negligence, and (ii) cannot be overcome or avoided
+by that party using reasonably diligent efforts.</p>
+<p>15.11 .. raw:: html</p>
+<blockquote>
+<div><p>&lt;u&gt;Entire Agreement.&lt;/u&gt;</p>
+</div></blockquote>
+<p>Regarding the subject matter of this Agreement, the parties agree that (a) this Agreement
+constitutes the entire and exclusive agreement between the parties and supersedes all prior and contemporaneous
+communications and (b) any additional or different terms or conditions, whether contained in purchase orders, order
+acknowledgments, invoices or otherwise, will not be binding and are null and void.</p>
+<p>(v. April 21, 2025)</p>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="cybersecurity-disclosures.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Cybersecurity Disclosures</p>
+      </div>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+
+
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#license-grants">1. License Grants.</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#license-restrictions">2. License Restrictions.</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#authorized-users">3. Authorized Users.</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#pre-release">4. Pre-Release.</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#updates">5. Updates.</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#components-under-other-licenses">6. Components Under Other Licenses.</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#ownership">7. Ownership.</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#feedback">8. Feedback.</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#termination">9. Termination.</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#disclaimer-of-warranties">10. Disclaimer of Warranties.</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#limitations-of-liability">11. Limitations of Liability.</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#use-in-mission-critical-applications">12. Use in Mission Critical Applications.</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#governing-law-and-jurisdiction">13. Governing Law and Jurisdiction.</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#indemnity">14. Indemnity.</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#general">15. General.</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=7f76b32a3354e82990f2"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=7f76b32a3354e82990f2"></script>
+
+
+<script type="text/javascript">if (typeof _satellite !== "undefined") {_satellite.pageBottom();}</script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+<a class="footer-brand logo" href="https://www.nvidia.com">
+  <img src="../_static/nvidia-logo-horiz-rgb-1c-blk-for-screen.svg" class="logo__image only-light" alt="NVIDIA"/>
+  <img src="../_static/nvidia-logo-horiz-rgb-1c-wht-for-screen.svg" class="logo__image only-dark" alt="NVIDIA"/>
+</a></div>
+      
+        <div class="footer-item">
+
+<div class="footer-links">
+  
+  
+  <a class="external" href="https://www.nvidia.com/en-us/about-nvidia/privacy-policy/">Privacy Policy</a>
+   | 
+  
+  
+  
+  <a class="external" href="https://www.nvidia.com/en-us/about-nvidia/privacy-center/">Your Privacy Choices</a>
+   | 
+  
+  
+  
+  <a class="external" href="https://www.nvidia.com/en-us/about-nvidia/terms-of-service/">Terms of Service</a>
+   | 
+  
+  
+  
+  <a class="external" href="https://www.nvidia.com/en-us/about-nvidia/accessibility/">Accessibility</a>
+   | 
+  
+  
+  
+  <a class="external" href="https://www.nvidia.com/en-us/about-nvidia/company-policies/">Corporate Policies</a>
+   | 
+  
+  
+  
+  <a class="external" href="https://www.nvidia.com/en-us/product-security/">Product Security</a>
+   | 
+  
+  
+  
+  <a class="external" href="https://www.nvidia.com/en-us/contact/">Contact</a>
+  
+  
+  
+</div>
+</div>
+      
+        <div class="footer-item">
+
+
+
+
+  <p class="copyright">
+    
+      Copyright © 2025-2026, NVIDIA Corporation.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item"><p class="last-updated">
+  Last updated on Jul 27, 2026.
+  <br/>
+</p></div>
+      
+    </div>
+  
+  
+  
+</div>
+
+  </footer>
+  </body>
+</html>

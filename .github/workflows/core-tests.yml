@@ -1,0 +1,15 @@
+name: Native core tests
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+          persist-credentials: false
+      - name: Build and test without camera, GPU or model downloads
+        shell: pwsh
+        run: ./scripts/build.ps1 -Bootstrap -CoreOnly

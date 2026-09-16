@@ -1,0 +1,18 @@
+* text=auto
+*.cpp text eol=lf
+*.hpp text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+model_config.yaml -text
+.clang-format text eol=lf
+CMakeLists.txt text eol=lf
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.onnx filter=lfs diff=lfs merge=lfs -text
+*.onnx.data filter=lfs diff=lfs merge=lfs -text
+*.pt filter=lfs diff=lfs merge=lfs -text
+*.ckpt filter=lfs diff=lfs merge=lfs -text
+*.lib filter=lfs diff=lfs merge=lfs -text

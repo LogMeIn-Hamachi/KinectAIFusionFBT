@@ -1,0 +1,6 @@
+{
+  "sampling_nodes": 5,
+  "low_precision_linears": 0,
+  "source_decoder_sha256": "5626efc861bca0ec231b0f78d9661e63cbdf8be757f46d25d0cfe9279e0da168",
+  "scope": "Five grid-sampling calls reshaped to parallelize feature channels; weights and precision unchanged."
+}

@@ -1,0 +1,30 @@
+{
+  "repository": "facebook/sam-3d-body-dinov3",
+  "revision": "11aaa346c7204874a1cbafe3d39a979080b2c55a",
+  "files": [
+    {
+      "source_file": "model.ckpt",
+      "local_file": "model.ckpt",
+      "sha256": "b5a2f9d305dd02626b967aa2e86021fba07065df66ce7a7e00ffb9664f150abf",
+      "bytes": 2109129346,
+      "upstream_hash_verified": true
+    },
+    {
+      "source_file": "model_config.yaml",
+      "local_file": "model_config.yaml",
+      "sha256": "9305a7e71d1fd3be79ff9c7d1f9f90991f35942f9527dd908a88d1e7aa280675",
+      "bytes": 1559,
+      "upstream_hash_verified": false,
+      "upstream_normalized_text_verified": true,
+      "upstream_git_blob_sha1": "c43c46e52f41c76094a6fdfe12aee0348213a82b",
+      "text_normalization": "CRLF to LF and one final newline; YAML content identical"
+    },
+    {
+      "source_file": "assets/mhr_model.pt",
+      "local_file": "mhr_model.pt",
+      "sha256": "352e271a6c42729c68554ceaea0c955e866970160c31e35506d782dc0f7377bc",
+      "bytes": 696110248,
+      "upstream_hash_verified": true
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "verifiedDate": "2026-09-16",
+  "schema": 1,
+  "assets": [
+    {
+      "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.30.0/onnxruntime-win-x64-1.30.0.zip",
+      "file": "third_party/ort.zip",
+      "extract": "third_party",
+      "name": "onnxruntime",
+      "sha256": "c6ba983baf5681af108599675d2a89c2d145512d02de28aed0bff177cd0ba949",
+      "core": false
+    },
+    {
+      "url": "https://github.com/NVIDIA/TensorRT-RTX-EP-ABI/releases/download/v0.4.1/TensorRT-RTX-EP-ABI-v0.4.1-cu13.zip",
+      "file": "third_party/trt.zip",
+      "extract": "third_party/trt",
+      "name": "nvidia_ep",
+      "sha256": "6db9a055d27d11f5abbd448ebcb80fe6d687b877210f87b5cddef542297879d9",
+      "core": false
+    },
+    {
+      "url": "https://raw.githubusercontent.com/ValveSoftware/openvr/0924064316de3effbcd1acf1e309182a2deb1c05/headers/openvr.h",
+      "file": "third_party/openvr/headers/openvr.h",
+      "sha256": "641ef9791fa8a281c490c85337cb3cbea8929055cfad1c78275d26cef587884f",
+      "name": "openvr_headers/openvr.h",
+      "core": true
+    },
+    {
+      "url": "https://raw.githubusercontent.com/ValveSoftware/openvr/0924064316de3effbcd1acf1e309182a2deb1c05/bin/win64/openvr_api.dll",
+      "file": "third_party/openvr/bin/win64/openvr_api.dll",
+      "sha256": "bab8ac6ef64e68a9ca53315b0014d131088584b2efdfa6db511d67ec03cfcb4a",
+      "name": "openvr_bin/win64/openvr_api.dll",
+      "core": false
+    },
+    {
+      "url": "https://raw.githubusercontent.com/ValveSoftware/openvr/0924064316de3effbcd1acf1e309182a2deb1c05/lib/win64/openvr_api.lib",
+      "file": "third_party/openvr/lib/win64/openvr_api.lib",
+      "sha256": "a0bf57c5920f569e8d21ab3e5bc95bac4b73e2016217f8b5b93495a2a7197bbb",
+      "name": "openvr_lib/win64/openvr_api.lib",
+      "core": false
+    },
+    {
+      "url": "https://raw.githubusercontent.com/ValveSoftware/openvr/0924064316de3effbcd1acf1e309182a2deb1c05/LICENSE",
+      "file": "third_party/openvr/LICENSE",
+      "sha256": "9e6d1480fb68e86ceafed312f7e67dadcdc2a99b350b710d624b8f0f0f1a2329",
+      "name": "openvr_LICENSE",
+      "core": false
+    },
+    {
+      "name": "openvr_headers/openvr_driver.h",
+      "url": "https://raw.githubusercontent.com/ValveSoftware/openvr/0924064316de3effbcd1acf1e309182a2deb1c05/headers/openvr_driver.h",
+      "file": "third_party/openvr/headers/openvr_driver.h",
+      "sha256": "914a17b6dbcc73d1cac5281d6253d5563879ec5029b5db43b9dfc6863b435528",
+      "core": true
+    }
+  ]
+}
