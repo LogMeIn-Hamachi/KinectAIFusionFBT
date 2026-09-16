@@ -142,6 +142,8 @@ std::uint32_t Estimator::reconcileIdentity(const Frame &frame, const Calibration
         selected_ = candidate;
         state_.body.id = candidate;
         velocity_ = {}; // Preserve proportions, but never carry occlusion velocity into a new ID.
+        angularVelocity_ = {};
+        previousRotation_ = {};
         learnedFilters_={};
         sourceTransitions_={};
         soleCorrections_={};
@@ -208,6 +210,8 @@ void Estimator::select(std::uint32_t id) {
     state_ = {};
     state_.body.id = id;
     velocity_ = {};
+    angularVelocity_ = {};
+    previousRotation_ = {};
     seen_ = {};
     lengths_ = {};
     initialized_ = 0;
@@ -417,7 +421,15 @@ State Estimator::process(const Frame &f, const Keypoints *rgb, const Calibration
             velocity_[j] = lerp(velocity_[j], bounded((out.p - previous.body.joints[j].p) / dt, 5), 0.4);
         if(out.source==5 && ((!(learned && learned->bodyFitted) && learnedFilters_[j].resting) || previous.body.joints[j].source!=5))
             velocity_[j]={}; // Do not extrapolate measurement wobble into fresh OSC positions.
-        if(learned && learned->bodyFitted && (learned->resting[j] || norm(velocity_[j])<.04))velocity_[j]={};
+        if(learned && learned->bodyFitted) {
+            double speed = norm(velocity_[j]);
+            double deadband = learned->resting[j] ? 0.035 : 0.015;
+            if (speed <= deadband) {
+                velocity_[j] = {};
+            } else if (speed < deadband + 0.035) {
+                velocity_[j] *= (speed - deadband) / 0.035;
+            }
+        }
     }
     if (raw)
         state_.body.player = raw->player;
@@ -549,6 +561,28 @@ State Estimator::process(const Frame &f, const Keypoints *rgb, const Calibration
                 soleCorrections_[side]={}; // plant correction already includes floor height.
             }else {plants_[side]={};t.p+=f.floor.n*soleCorrections_[side].update(target,dt);}
         } else {soleCorrections_[side]={};plants_[side]={};}
+    }
+    for (int i = 0; i < 3; ++i) {
+        auto &t = state_.trackers[i];
+        if (t.valid && previous.host > 0 && dt > 0.005 && std::isfinite(dot(previousRotation_[i], previousRotation_[i])) && dot(previousRotation_[i], previousRotation_[i]) > 0.5) {
+            Q delta = continuous(t.q, previousRotation_[i]) * previousRotation_[i].conjugate();
+            V3 axis = {delta.x, delta.y, delta.z};
+            double normAxis = norm(axis);
+            double angle = 2 * std::atan2(normAxis, std::max(0.0, delta.w));
+            V3 rawAngVel = normAxis > 1e-6 ? (axis / normAxis) * (angle / dt) : V3{};
+            angularVelocity_[i] = lerp(angularVelocity_[i], bounded(rawAngVel, 20), 0.45);
+            double speed = norm(angularVelocity_[i]);
+            double deadband = 0.04;
+            if (speed <= deadband) {
+                angularVelocity_[i] = {};
+            } else if (speed < deadband + 0.08) {
+                angularVelocity_[i] *= (speed - deadband) / 0.08;
+            }
+        } else if (!t.valid) {
+            angularVelocity_[i] = {};
+        }
+        t.angularVelocity = angularVelocity_[i];
+        previousRotation_[i] = t.q;
     }
     state_.host = f.host;
     if (measured >= 6)

@@ -37,6 +37,14 @@ struct V3 {
         *this = *this + b;
         return *this;
     }
+    V3 &operator-=(V3 b) {
+        *this = *this - b;
+        return *this;
+    }
+    V3 &operator*=(double s) {
+        x *= s; y *= s; z *= s;
+        return *this;
+    }
 };
 inline double dot(V3 a, V3 b) {
     return a.x * b.x + a.y * b.y + a.z * b.z;
@@ -422,6 +430,7 @@ struct FootContact {
 struct Tracker {
     V3 p{}, velocity{};
     Q q{};
+    V3 angularVelocity{};
     V3 angularSigma{pi, pi, pi};
     double positionSigma{1};
     bool valid{};
@@ -584,6 +593,8 @@ class Estimator {
     std::uint32_t selected_{};
     unsigned initialized_{};
     std::array<RotationEvidence, 3> rotations_{};
+    std::array<V3, 3> angularVelocity_{};
+    std::array<Q, 3> previousRotation_{};
     std::array<LearnedPositionFilter,J> learnedFilters_{};
     std::array<SourceTransition,J> sourceTransitions_{};
     std::array<SoleCorrection,2> soleCorrections_{};

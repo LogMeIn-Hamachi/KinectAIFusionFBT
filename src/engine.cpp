@@ -3,6 +3,7 @@
 #include "nlf_model.hpp"
 #include "body_tracker.hpp"
 #include "steamvr_bridge.hpp"
+#include <timeapi.h>
 #include <iomanip>
 #include <sstream>
 namespace kf {
@@ -761,6 +762,7 @@ void Engine::processLoop() {
     }
 }
 void Engine::outputLoop() {
+    timeBeginPeriod(1);
     OscOutput osc;SteamVrBridge bridge;
     HANDLE writer=CreateMutexW(nullptr,FALSE,L"Local\\KinectFBT_Writer_v1");bool claimed=false;
     while(run_) {
@@ -794,10 +796,11 @@ void Engine::outputLoop() {
             }else status=s.steamVrOutput?(bridge.driverReady()?"SteamVR driver ready - output paused":"SteamVR driver not running - restart SteamVR after installation"):"OSC output paused";
         }
         {std::lock_guard l(mutex_);view_.outputStatus=status;}
-        std::this_thread::sleep_for(std::chrono::milliseconds(11));
+        std::this_thread::sleep_for(std::chrono::milliseconds(8));
     }
     if(claimed){BridgePacket off;off.published=now();bool ready;bridge.publish(off,ready);ReleaseMutex(writer);}
     if(writer)CloseHandle(writer);
+    timeEndPeriod(1);
 }
 void Engine::recordLoop() {
     RecordingWriter writer;

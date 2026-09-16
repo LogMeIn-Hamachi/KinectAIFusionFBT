@@ -46,9 +46,34 @@ public:
         p.poseIsValid=p.deviceIsConnected;
         p.result=p.poseIsValid?vr::TrackingResult_Running_OK:vr::TrackingResult_Uninitialized;
         if(p.poseIsValid) {
-            p.poseTimeOffset=std::clamp(packet.published-time,-.25,0.);
-            for(int j=0;j<3;++j){p.vecPosition[j]=in.position[j];p.vecVelocity[j]=in.velocity[j];}
-            p.qRotation={in.rotation[0],in.rotation[1],in.rotation[2],in.rotation[3]};
+            double dt=std::clamp(time-packet.published,0.0,0.12);
+            double posDt=dt;
+            double decay=1.0;
+            if(dt>0.04) {
+                double span=0.05;
+                double excess=dt-0.04;
+                decay=std::clamp(1.0-excess/span,0.0,1.0);
+                posDt=0.04+excess*(1.0-0.5*std::min(excess,span)/span);
+            }
+            kf::V3 pos{in.position[0],in.position[1],in.position[2]};
+            kf::V3 vel{in.velocity[0],in.velocity[1],in.velocity[2]};
+            pos+=vel*posDt;
+            vel=vel*decay;
+
+            kf::Q rot{in.rotation[0],in.rotation[1],in.rotation[2],in.rotation[3]};
+            kf::V3 angVel{in.angularVelocity[0],in.angularVelocity[1],in.angularVelocity[2]};
+            double angSpeed=kf::norm(angVel);
+            if(angSpeed>1e-6) {
+                kf::Q deltaRot=kf::axisAngle(angVel,posDt*decay);
+                rot=kf::normalized(deltaRot*rot);
+            }
+            angVel=angVel*decay;
+
+            p.poseTimeOffset=0.0;
+            p.vecPosition[0]=pos.x;p.vecPosition[1]=pos.y;p.vecPosition[2]=pos.z;
+            p.vecVelocity[0]=vel.x;p.vecVelocity[1]=vel.y;p.vecVelocity[2]=vel.z;
+            p.qRotation={rot.w,rot.x,rot.y,rot.z};
+            p.vecAngularVelocity[0]=angVel.x;p.vecAngularVelocity[1]=angVel.y;p.vecAngularVelocity[2]=angVel.z;
         }
         {std::lock_guard l(mutex_);pose_=p;}
         if(index_!=vr::k_unTrackedDeviceIndexInvalid)vr::VRServerDriverHost()->TrackedDevicePoseUpdated(index_,p,sizeof(p));

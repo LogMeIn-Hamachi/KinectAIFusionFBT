@@ -3,9 +3,9 @@
 #include <Windows.h>
 #include <cstring>
 namespace kf {
-inline constexpr uint32_t bridgeMagic=0x4b465442,bridgeVersion=1;
+inline constexpr uint32_t bridgeMagic=0x4b465442,bridgeVersion=2;
 struct BridgePose {
-    double position[3]{},rotation[4]{1,0,0,0},velocity[3]{},validUntil{};
+    double position[3]{},rotation[4]{1,0,0,0},velocity[3]{},angularVelocity[3]{},validUntil{};
     uint32_t valid{};
 };
 struct BridgePacket {
@@ -19,8 +19,10 @@ inline bool validPacket(const BridgePacket& p,double time) {
        !std::isfinite(p.published) || p.published>time+.01 || time-p.published>.25)return false;
     for(auto& v:p.poses)if(v.valid) {
         V3 position{v.position[0],v.position[1],v.position[2]},velocity{v.velocity[0],v.velocity[1],v.velocity[2]};
+        V3 angVel{v.angularVelocity[0],v.angularVelocity[1],v.angularVelocity[2]};
         Q q{v.rotation[0],v.rotation[1],v.rotation[2],v.rotation[3]};
         if(!finite(position) || norm(position)>50 || !finite(velocity) || norm(velocity)>4.01 ||
+           !finite(angVel) || norm(angVel)>25.01 ||
            !std::isfinite(dot(q,q)) || std::abs(dot(q,q)-1)>.001 || !std::isfinite(v.validUntil) || v.validUntil>p.published+.25)return false;
     }
     return true;
@@ -38,6 +40,7 @@ inline BridgePacket trackerPacket(const State& state,const Calibration& cal,cons
         auto p=cameraToRaw.apply(t.p);
         auto q=normalized(cameraToRaw.q*t.q);
         auto v=cameraToRaw.q.rotate(bounded(t.velocity,4));
+        auto w=cameraToRaw.q.rotate(bounded(t.angularVelocity,20));
         const double age = time - state.host;
         if(age > .04) {
             double dt = age - .04;
@@ -47,9 +50,21 @@ inline BridgePacket trackerPacket(const State& state,const Calibration& cal,cons
             p += v * effectiveDt;
             v = v * decay;
         }
+        if(norm(w) > 1e-6 && age > 0) {
+            double rotDt = std::min(age, 0.04);
+            if(age > 0.04) {
+                double dt = age - 0.04;
+                double span = 0.05;
+                double decay = std::clamp(1.0 - dt / span, 0.0, 1.0);
+                rotDt += dt * (1.0 - 0.5 * std::min(dt, span) / span);
+                w = w * decay;
+            }
+            q = normalized(axisAngle(w, rotDt) * q);
+        }
         out.position[0]=p.x;out.position[1]=p.y;out.position[2]=p.z;
         out.rotation[0]=q.w;out.rotation[1]=q.x;out.rotation[2]=q.y;out.rotation[3]=q.z;
         out.velocity[0]=v.x;out.velocity[1]=v.y;out.velocity[2]=v.z;
+        out.angularVelocity[0]=w.x;out.angularVelocity[1]=w.y;out.angularVelocity[2]=w.z;
         out.validUntil=(t.observedHost>0?t.observedHost:state.lastObserved)+outputHoldSeconds;
         out.valid=t.valid;
     }
@@ -62,8 +77,8 @@ class SteamVrBridge {
     BridgeMemory* memory_{};
 public:
     explicit SteamVrBridge(bool testOnly=false) {
-        mutex_=CreateMutexW(nullptr,FALSE,testOnly?L"Local\\KinectFBT_TestMutex_v1":L"Local\\KinectFBT_PoseMutex_v1");
-        mapping_=CreateFileMappingW(INVALID_HANDLE_VALUE,nullptr,PAGE_READWRITE,0,sizeof(BridgeMemory),testOnly?L"Local\\KinectFBT_TestPoses_v1":L"Local\\KinectFBT_Poses_v1");
+        mutex_=CreateMutexW(nullptr,FALSE,testOnly?L"Local\\KinectFBT_TestMutex_v2":L"Local\\KinectFBT_PoseMutex_v2");
+        mapping_=CreateFileMappingW(INVALID_HANDLE_VALUE,nullptr,PAGE_READWRITE,0,sizeof(BridgeMemory),testOnly?L"Local\\KinectFBT_TestPoses_v2":L"Local\\KinectFBT_Poses_v2");
         if(mapping_)memory_=static_cast<BridgeMemory*>(MapViewOfFile(mapping_,FILE_MAP_ALL_ACCESS,0,0,sizeof(BridgeMemory)));
     }
     ~SteamVrBridge(){if(memory_)UnmapViewOfFile(memory_);if(mapping_)CloseHandle(mapping_);if(mutex_)CloseHandle(mutex_);}
