@@ -41,26 +41,7 @@ inline BridgePacket trackerPacket(const State& state,const Calibration& cal,cons
         auto q=normalized(cameraToRaw.q*t.q);
         auto v=cameraToRaw.q.rotate(bounded(t.velocity,4));
         auto w=cameraToRaw.q.rotate(bounded(t.angularVelocity,20));
-        const double age = time - state.host;
-        if(age > .04) {
-            double dt = age - .04;
-            double span = .05;
-            double decay = std::clamp(1.0 - dt / span, 0.0, 1.0);
-            double effectiveDt = dt * (1.0 - 0.5 * std::min(dt, span) / span);
-            p += v * effectiveDt;
-            v = v * decay;
-        }
-        if(norm(w) > 1e-6 && age > 0) {
-            double rotDt = std::min(age, 0.04);
-            if(age > 0.04) {
-                double dt = age - 0.04;
-                double span = 0.05;
-                double decay = std::clamp(1.0 - dt / span, 0.0, 1.0);
-                rotDt += dt * (1.0 - 0.5 * std::min(dt, span) / span);
-                w = w * decay;
-            }
-            q = normalized(axisAngle(w, rotDt) * q);
-        }
+        if(time-state.host>.04)v={};
         out.position[0]=p.x;out.position[1]=p.y;out.position[2]=p.z;
         out.rotation[0]=q.w;out.rotation[1]=q.x;out.rotation[2]=q.y;out.rotation[3]=q.z;
         out.velocity[0]=v.x;out.velocity[1]=v.y;out.velocity[2]=v.z;

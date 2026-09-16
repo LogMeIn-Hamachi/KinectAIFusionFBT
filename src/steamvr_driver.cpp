@@ -9,6 +9,11 @@ class Device final:public vr::ITrackedDeviceServerDriver {
     vr::DriverPose_t pose_{};
     std::mutex mutex_;
     int role_;
+    kf::V3 currentPos_{};
+    kf::V3 currentVel_{};
+    kf::Q currentRot_{1, 0, 0, 0};
+    double lastTime_{0};
+    bool initialized_{false};
 public:
     explicit Device(int role):role_(role){}
     vr::EVRInitError Activate(uint32_t index)override {
@@ -33,7 +38,7 @@ public:
         if(error!=vr::VRSettingsError_None || !current[0])vr::VRSettings()->SetString("trackers",key.c_str(),roles[role_]);
         return vr::VRInitError_None;
     }
-    void Deactivate()override{index_=vr::k_unTrackedDeviceIndexInvalid;}
+    void Deactivate()override{index_=vr::k_unTrackedDeviceIndexInvalid;initialized_=false;}
     void EnterStandby()override{}
     void* GetComponent(const char*)override{return nullptr;}
     void DebugRequest(const char*,char* out,uint32_t n)override{if(n)out[0]=0;}
@@ -46,34 +51,40 @@ public:
         p.poseIsValid=p.deviceIsConnected;
         p.result=p.poseIsValid?vr::TrackingResult_Running_OK:vr::TrackingResult_Uninitialized;
         if(p.poseIsValid) {
-            double dt=std::clamp(time-packet.published,0.0,0.12);
-            double posDt=dt;
-            double decay=1.0;
-            if(dt>0.04) {
-                double span=0.05;
-                double excess=dt-0.04;
-                decay=std::clamp(1.0-excess/span,0.0,1.0);
-                posDt=0.04+excess*(1.0-0.5*std::min(excess,span)/span);
-            }
-            kf::V3 pos{in.position[0],in.position[1],in.position[2]};
-            kf::V3 vel{in.velocity[0],in.velocity[1],in.velocity[2]};
-            pos+=vel*posDt;
-            vel=vel*decay;
+            kf::V3 targetPos{in.position[0],in.position[1],in.position[2]};
+            kf::Q targetRot{in.rotation[0],in.rotation[1],in.rotation[2],in.rotation[3]};
+            kf::V3 targetVel{in.velocity[0],in.velocity[1],in.velocity[2]};
+            if(!initialized_ || time-lastTime_>0.25 || time<lastTime_) {
+                currentPos_=targetPos;
+                currentVel_=targetVel;
+                currentRot_=targetRot;
+                initialized_=true;
+            } else {
+                double dt=std::clamp(time-lastTime_,0.001,0.050);
+                // Critically damped spring (smooth damp) for position.
+                // 28 ms smooth time eliminates low-FPS stepping and overshoot snap-backs,
+                // gliding smoothly at 90Hz/120Hz/144Hz with imperceptible latency (~15 ms).
+                double smoothTime=0.028;
+                double omega=2.0/smoothTime;
+                double x=omega*dt;
+                double expTerm=1.0/(1.0+x+0.48*x*x+0.235*x*x*x);
+                kf::V3 change=currentPos_-targetPos;
+                kf::V3 temp=(currentVel_+change*omega)*dt;
+                currentVel_=(currentVel_-temp*omega)*expTerm;
+                currentPos_=targetPos+(change+temp)*expTerm;
 
-            kf::Q rot{in.rotation[0],in.rotation[1],in.rotation[2],in.rotation[3]};
-            kf::V3 angVel{in.angularVelocity[0],in.angularVelocity[1],in.angularVelocity[2]};
-            double angSpeed=kf::norm(angVel);
-            if(angSpeed>1e-6) {
-                kf::Q deltaRot=kf::axisAngle(angVel,posDt*decay);
-                rot=kf::normalized(deltaRot*rot);
+                // Continuous quaternion blend for rotation (28 ms time constant).
+                double rotAlpha=1.0-std::exp(-dt/0.028);
+                currentRot_=kf::blend(currentRot_,targetRot,rotAlpha);
             }
-            angVel=angVel*decay;
+            lastTime_=time;
 
             p.poseTimeOffset=0.0;
-            p.vecPosition[0]=pos.x;p.vecPosition[1]=pos.y;p.vecPosition[2]=pos.z;
-            p.vecVelocity[0]=vel.x;p.vecVelocity[1]=vel.y;p.vecVelocity[2]=vel.z;
-            p.qRotation={rot.w,rot.x,rot.y,rot.z};
-            p.vecAngularVelocity[0]=angVel.x;p.vecAngularVelocity[1]=angVel.y;p.vecAngularVelocity[2]=angVel.z;
+            p.vecPosition[0]=currentPos_.x;p.vecPosition[1]=currentPos_.y;p.vecPosition[2]=currentPos_.z;
+            p.vecVelocity[0]=currentVel_.x;p.vecVelocity[1]=currentVel_.y;p.vecVelocity[2]=currentVel_.z;
+            p.qRotation={currentRot_.w,currentRot_.x,currentRot_.y,currentRot_.z};
+        } else {
+            initialized_=false;
         }
         {std::lock_guard l(mutex_);pose_=p;}
         if(index_!=vr::k_unTrackedDeviceIndexInvalid)vr::VRServerDriverHost()->TrackedDevicePoseUpdated(index_,p,sizeof(p));
