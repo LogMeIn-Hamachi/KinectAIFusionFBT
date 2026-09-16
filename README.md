@@ -31,7 +31,7 @@ By combining the **Fast SAM 3D Body** deep learning foundation model with high-s
 | Component | Requirements | Notes |
 | :--- | :--- | :--- |
 | **Kinect Sensor** | **Kinect v1 / Xbox 360** *(Model 1414 / 1473)*<br>**Kinect v2 / Xbox One** *(Model 1520)* | • Kinect v1 requires standard 12V AC power + USB adapter cable (works on USB 2.0 or 3.0).<br>• Kinect v2 requires standard 12V AC power + USB 3.0 adapter cable. |
-| **GPU** | **NVIDIA GeForce RTX Series**<br>*(RTX 20, 30, 40, or 50 series)* | Tested on Windows 11 with RTX 5070 Ti, 4080, 3070, and 2080. NVIDIA TensorRT and CUDA 12.8 required (bundled in release). |
+| **GPU** | **NVIDIA GeForce RTX 4000 / 5000 Series**<br>*(Ada Lovelace or Blackwell)* | **RTX 4000 or 5000 series required** (tested on Windows 11 with RTX 5070 Ti). Requires native hardware FP8 Tensor Cores for the accelerated neural model. Older cards (RTX 20 and 30 series) lack hardware FP8 compute and are not supported. NVIDIA TensorRT and CUDA 12.8 runtimes are bundled in the release. |
 | **VR Headset** | **Any SteamVR-compatible PCVR Headset** | Meta Quest (Link / AirLink / Virtual Desktop), Valve Index, HTC Vive, Bigscreen Beyond, Pico 4, Windows Mixed Reality, etc. |
 | **Controllers** | **2 Positional VR Controllers** | Used during the quick 5-pose alignment routine. |
 
@@ -167,6 +167,19 @@ You must install the official **Microsoft Kinect for Windows SDK 1.8** installer
 <summary><b>Kinect v2 drops frames or fails to start</b></summary>
 
 Kinect v2 requires high USB 3.0 isochronous bandwidth. Ensure the Kinect v2 USB cable is plugged directly into a native motherboard USB 3.0 port (blue port or USB 3.1/3.2), not into an unpowered USB hub.
+</details>
+
+<details>
+<summary><b>Kinect v2 restarts in a loop / keeps disconnecting on Windows 11</b></summary>
+
+A known Windows 11 driver conflict causes the Kinect v2 to repeatedly power cycle and restart in a continuous loop when audio enhancements are active:
+1. Right-click the **speaker icon** in the Windows taskbar (by the clock) and select **Sound settings**.
+2. Scroll down and click **More sound settings** to open the classic Sound dialog.
+3. Switch to the **Recording** tab.
+4. Select **Microphone Array (Xbox NUI Sensor)** and click **Properties**.
+5. Switch to the **Advanced** tab.
+6. Under **Signal Enhancements**, uncheck **Enable audio enhancements**.
+7. Click **Apply**, then **OK**.
 </details>
 
 ---

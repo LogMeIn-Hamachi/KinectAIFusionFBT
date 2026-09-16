@@ -2,6 +2,8 @@
 
 **No sensor:** check the powered adapter and USB connection. V2 requires USB 3 and its Microsoft runtime. Close other applications using the Kinect. Do not replace its USB driver with a generic driver.
 
+**Kinect v2 restart loop / keeps disconnecting on Windows 11:** Windows 11 audio enhancements cause the Kinect v2 to continuously restart. Right-click the speaker icon in the taskbar → Sound settings → More sound settings → Recording tab → select Microphone Array (Xbox NUI Sensor) → Properties → Advanced tab → uncheck "Enable audio enhancements" → Apply and OK.
+
 **First Start takes a while:** the model is checked and a local GPU cache is prepared. Subsequent starts reuse the cache. Keep the package in a writable folder. The application status reports model preparation/errors. It requires NVIDIA acceleration; there is no CPU SAM fallback.
 
 **Model error:** keep all extracted files together. Install an NVIDIA driver compatible with the bundled CUDA/TensorRT runtimes. Stop tracking and try Advanced → SAM original. If the error persists, use Diagnostics and retain the exact error text. Optimized SAM has been tested on RTX 5070 Ti; other GPUs have not been qualified with this package.

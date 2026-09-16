@@ -8,12 +8,12 @@ import subprocess
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / 'release/KinectSAM3D-Preview'
+SOURCE = ROOT / 'release/dev'
 TEMPLATES = ROOT / 'packaging/windows'
-NAME = 'KinectFBT-Preview23-Windows-x64'
+NAME = 'KinectAIFusionFBT-v1.0-Windows-x64'
 STAGE = ROOT / 'release' / NAME
 ARCHIVE = ROOT / 'release' / (NAME + '.zip')
-REPORT = ROOT / 'artifacts/playspace-release'
+REPORT = ROOT / 'artifacts/packaging' / NAME
 
 ROOT_DLLS = '''concrt140.dll msvcp140_1.dll msvcp140_2.dll msvcp140_atomic_wait.dll
 msvcp140_codecvt_ids.dll msvcp140.dll onnxruntime_providers_nv_tensorrt_rtx.dll
@@ -53,10 +53,11 @@ def selection():
         files[name] = TEMPLATES / name
     for name in ('TROUBLESHOOTING.md', 'RELEASE-NOTES.md'):
         files['docs/' + name] = TEMPLATES / name
-    for rel in ('driver.vrdrivermanifest', 'bin/win64/driver_kinect_fbt.dll',
+    for rel in ('driver.vrdrivermanifest',
                 'resources/input/tracker_profile.json', 'resources/settings/default.vrsettings'):
         key = 'steamvr-driver/kinect_fbt/' + rel
         files[key] = SOURCE / key
+    files['steamvr-driver/kinect_fbt/bin/win64/driver_kinect_fbt.dll'] = ROOT / 'build/Release/driver_kinect_fbt.dll'
     files['docs/model-provenance/checkpoint.json'] = ROOT / 'docs/model-provenance/checkpoint.json'
     files['docs/model-provenance/encoder-fp8.json'] = ROOT / 'docs/model-provenance/encoder-fp8.json'
     return files
@@ -91,7 +92,7 @@ def main():
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
         prerequisites = {
-            'schema': 2, 'release': 'preview23', 'platform': 'Windows x64; tested Windows 11',
+            'schema': 2, 'release': 'v1.0', 'platform': 'Windows x64; tested Windows 11',
             'gpu': 'NVIDIA required; tested RTX 5070 Ti; CUDA 12.8 decoder and TensorRT RTX 1.6 encoder',
             'sensor': ['Kinect v2 + powered USB 3 adapter + installed Microsoft Kinect20 runtime',
                        'Kinect v1 + powered adapter + installed Microsoft Kinect SDK 1.8'],
@@ -130,7 +131,7 @@ def main():
             text = path.read_text(encoding='utf-8')
             if any(s in text.lower() for s in ('c:/users/', 'c:\\users/', 'c:\\users\\')):
                 raise RuntimeError('Personal data found in ' + rel)
-    manifest = {'release': 'preview23', 'scope': 'All distributed files except this manifest; locally generated files are not included', 'files': records}
+    manifest = {'release': 'v1.0', 'scope': 'All distributed files except this manifest; locally generated files are not included', 'files': records}
     (STAGE / 'package-sha256.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     print('Integrity/allowlist checks passed; creating full ZIP', flush=True)
     if args.action == 'refresh':

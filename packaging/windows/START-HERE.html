@@ -9,7 +9,7 @@ body{margin:0;background:#101820;color:#eaf1f5;font:17px/1.65 system-ui,Segoe UI
 <p class="muted">Waist and foot tracking with Kinect v1/v2, Fast SAM 3D Body and depth. Everything is processed on your PC.</p>
 <div class="card"><strong>Extract the entire ZIP first.</strong><br>Put it in a folder you can write to, keep the files together, and open <code>KinectRGBD.exe</code>. Models and native runtimes are already included.</div>
 <h2>Before you start</h2>
-<p>You need a powered Kinect, a supported NVIDIA GPU/driver, SteamVR, a headset and two tracked controllers. Kinect v2 uses USB 3. Tested configuration: Windows 11, RTX 5070 Ti. Other GPU configurations have not been qualified with this preview.</p>
+<p>You need a powered Kinect, a supported NVIDIA GeForce RTX 4000 or 5000 series GPU (FP8 Tensor Cores required), SteamVR, a headset and two tracked controllers. Kinect v2 uses USB 3. Tested configuration: Windows 11, RTX 5070 Ti. Older RTX 20/30 series GPUs lack hardware FP8 and are not supported.</p>
 <p>Install the official sensor software if needed: <a href="https://www.microsoft.com/en-us/download/details.aspx?id=44559">Kinect v2 runtime</a> or <a href="https://www.microsoft.com/en-us/download/details.aspx?id=44561">SDK 2.0</a>; <a href="https://www.microsoft.com/en-us/download/details.aspx?id=40278">Kinect v1 SDK 1.8</a>. An existing working sensor installation is sufficient. No Python or CUDA developer toolkit is required.</p>
 <h2>One setup, at your pace</h2>
 <ol class="steps">
