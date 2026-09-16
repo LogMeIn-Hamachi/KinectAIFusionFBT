@@ -40,6 +40,14 @@ class AlignmentSession {
     size_t size() const { return samples_.size(); }
     const auto& samples()const{return samples_;}
     void applyOffsets(const std::array<V3,3>& offsets){fittedOffsets_=offsets;for(auto& s:samples_)s.offset=offsets[s.device];}
+    int deviceSamples(int device) const {
+        int n = 0;
+        for (const auto& s : samples_) if (s.device == device) ++n;
+        return n;
+    }
+    std::string deviceStatus(int device) const {
+        return (device >= 0 && device < 3) ? status_[device] : "";
+    }
 };
 Calibration calibrateControllers(std::span<const AlignmentObservation>, std::array<V3,3> &offsets,const Plane* floor=nullptr);
 struct AlignmentCue {
@@ -66,9 +74,12 @@ class GuidedAlignment {
 public:
     void reset(double start,const VrSample* vr=nullptr);
     void capturePose(double time);
-    void add(const Frame&,uint32_t,const Settings&);
+    void add(const Frame&,uint32_t,const Settings&,const PosePrior* prior=nullptr);
     AlignmentCue cue(double time)const;
     bool done()const{return done_;}
+    int stage()const{return stage_;}
+    int deviceSamples(int device)const{return stage_<5?sessions_[stage_].deviceSamples(device):0;}
+    std::string deviceStatus(int device)const{return stage_<5?sessions_[stage_].deviceStatus(device):"";}
     const Calibration& result()const{return result_;}
     const auto& offsets()const{return offsets_;}
     std::string agreement()const{return sessions_[4].agreement(result_);}

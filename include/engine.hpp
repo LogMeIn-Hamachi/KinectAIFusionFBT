@@ -28,6 +28,11 @@ struct View {
     double calibrationSecondsRemaining{};
     std::string calibrationPrompt, calibrationDetail;
     std::string calibrationSpeech, bodyPrompt, bodySpeech;
+    int calibrationStep{};
+    int calibrationLeftSamples{};
+    int calibrationRightSamples{};
+    std::string calibrationLeftStatus;
+    std::string calibrationRightStatus;
     bool bodyCollecting{};
     bool wristOffsetsReady{};
     bool calibrationWaiting{};

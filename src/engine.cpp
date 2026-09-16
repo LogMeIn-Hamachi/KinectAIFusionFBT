@@ -34,13 +34,19 @@ View Engine::view() const {
     auto copy = view_;
     copy.tiltWait=std::max(0.,tiltLimiter_.nextAllowed-now());
     if(copy.collecting) {
-        auto cue=alignment_.cue(now());copy.calibrationSecondsRemaining=cue.seconds;
+        auto cue=alignment_.cue(now());
+        copy.calibrationStep=cue.step;
+        copy.calibrationSecondsRemaining=cue.seconds;
         copy.calibrationWaiting=cue.waitingForReady;
         copy.calibrationPrompt=cue.instruction+"\n"+(cue.waitingForReady?
             "Take your time. Squeeze either trigger or click Capture pose when ready.":cue.collecting?
             (cue.seconds?"Hold still: "+std::to_string(cue.seconds)+" seconds":"Keep holding while both wrists are measured."):
             "Settle into position. Capture in "+std::to_string(cue.seconds)+" seconds.");
         copy.calibrationSpeech=cue.speech;
+        copy.calibrationLeftSamples=alignment_.deviceSamples(1);
+        copy.calibrationRightSamples=alignment_.deviceSamples(2);
+        copy.calibrationLeftStatus=alignment_.deviceStatus(1);
+        copy.calibrationRightStatus=alignment_.deviceStatus(2);
     }
     if(copy.bodyCollecting) {
         double elapsed=now()-bodyCaptureStart_;
@@ -746,7 +752,7 @@ void Engine::processLoop() {
             view_.arrivalToEstimateMs = config.replay ? 0 : (now() - frame->arrival) * 1000;
             ++view_.frames;
             if(view_.collecting) {
-                alignment_.add(*frame,id,view_.settings);
+                alignment_.add(*frame,id,view_.settings,learned?&*learned:nullptr);
                 view_.calibrationSamples=unsigned(alignment_.size());
                 view_.calibrationDetail=alignment_.feedback();
                 if(alignment_.done()) {
@@ -805,14 +811,17 @@ void Engine::outputLoop() {
             double nowTime = now();
             if (s.collecting) {
                 lastCalibrationActive_ = nowTime;
-                auto cue = alignment_.cue(nowTime);
                 os.active = true;
-                os.step = cue.step;
-                os.secondsRemaining = cue.seconds;
-                os.waitingForReady = cue.waitingForReady;
-                os.collecting = cue.collecting;
-                os.instruction = cue.instruction;
+                os.step = s.calibrationStep;
+                os.secondsRemaining = int(s.calibrationSecondsRemaining);
+                os.waitingForReady = s.calibrationWaiting;
+                os.collecting = !s.calibrationWaiting && (os.secondsRemaining <= int(calibrationHoldSeconds));
+                os.instruction = s.calibrationPrompt;
                 os.feedback = s.calibrationDetail;
+                os.leftSamples = s.calibrationLeftSamples;
+                os.rightSamples = s.calibrationRightSamples;
+                os.leftStatus = s.calibrationLeftStatus;
+                os.rightStatus = s.calibrationRightStatus;
                 if (s.frame) {
                     os.leftTracked = s.frame->vr.devices[1].valid;
                     os.rightTracked = s.frame->vr.devices[2].valid;

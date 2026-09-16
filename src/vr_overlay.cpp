@@ -56,6 +56,14 @@ struct VrOverlay::Impl {
     int lastSeconds_{-1};
     bool lastCollecting_{false};
     bool lastWaiting_{false};
+    bool lastDone_{false};
+    bool lastSuccess_{false};
+    int lastLeftSamples_{-1};
+    int lastRightSamples_{-1};
+    std::string lastLeftStatus_;
+    std::string lastRightStatus_;
+    bool lastLeftTracked_{false};
+    bool lastRightTracked_{false};
 
     Impl() {
         Gdiplus::GdiplusStartupInput gdiplusStartupInput;
@@ -101,6 +109,7 @@ struct VrOverlay::Impl {
         if (visible_ && handle_ != vr::k_ulOverlayHandleInvalid && vr::VROverlay()) {
             vr::VROverlay()->HideOverlay(handle_);
             visible_ = false;
+            lastStep_ = -1;
         }
     }
 
@@ -166,7 +175,7 @@ struct VrOverlay::Impl {
             L"Pose 5: Check Pose (Hands Forward)"
         };
         std::wstring poseDescriptions[5] = {
-            L"Hold both controllers low in front of your waist.\nPoint both controllers straight down towards the floor.",
+            L"Hold both controllers low in front of your waist.\nPoint both controllers straight down towards the floor.\nKeep hands slightly forward away from your body so Kinect sees wrists.",
             L"Hold controllers forward at chest height.\nPoint both controllers straight forward towards the camera.",
             L"Hold hands comfortably apart to each side.\nPoint controllers diagonally outward to each side.",
             L"Hold controllers in front of your chest.\nPoint both controllers straight up towards the ceiling.",
@@ -206,7 +215,7 @@ struct VrOverlay::Impl {
         // Draw Left & Right controller representations
         float ctrlLeftX = diagX + 75;
         float ctrlRightX = diagX + 225;
-        float ctrlCenterY = diagY + 115;
+        float ctrlCenterY = diagY + 110;
 
         // Controller grips (capsules)
         Gdiplus::SolidBrush gripBrush(Gdiplus::Color(255, 45, 60, 78));
@@ -214,15 +223,28 @@ struct VrOverlay::Impl {
         drawRoundedRect(g, gripBorder, gripBrush, ctrlLeftX - 22, ctrlCenterY - 32, 44, 64, 10);
         drawRoundedRect(g, gripBorder, gripBrush, ctrlRightX - 22, ctrlCenterY - 32, 44, 64, 10);
 
-        // Controller labels
-        g.DrawString(L"LEFT", -1, &diagramFont, Gdiplus::RectF(ctrlLeftX - 30, ctrlCenterY + 38, 60, 20), &centerFormat, &diagHeaderBrush);
-        g.DrawString(L"RIGHT", -1, &diagramFont, Gdiplus::RectF(ctrlRightX - 30, ctrlCenterY + 38, 60, 20), &centerFormat, &diagHeaderBrush);
+        // Controller labels & sample count
+        std::wstring leftLabel = L"LEFT\n" + std::to_wstring(std::clamp(state.leftSamples, 0, 12)) + L"/12";
+        std::wstring rightLabel = L"RIGHT\n" + std::to_wstring(std::clamp(state.rightSamples, 0, 12)) + L"/12";
+        g.DrawString(leftLabel.c_str(), -1, &diagramFont, Gdiplus::RectF(ctrlLeftX - 35, ctrlCenterY + 36, 70, 32), &centerFormat, &diagHeaderBrush);
+        g.DrawString(rightLabel.c_str(), -1, &diagramFont, Gdiplus::RectF(ctrlRightX - 35, ctrlCenterY + 36, 70, 32), &centerFormat, &diagHeaderBrush);
 
-        // Controller tracking dots
+        // Controller tracking dots (Kinect sight + VR connection)
+        bool leftOccluded = (state.leftStatus == "Kinect cannot see wrist");
+        bool rightOccluded = (state.rightStatus == "Kinect cannot see wrist");
+
         Gdiplus::SolidBrush trackedDot(Gdiplus::Color(255, 78, 240, 143));
-        Gdiplus::SolidBrush untrackedDot(Gdiplus::Color(255, 230, 110, 60));
-        g.FillEllipse(state.leftTracked ? &trackedDot : &untrackedDot, ctrlLeftX - 4.0f, ctrlCenterY - 26.0f, 8.0f, 8.0f);
-        g.FillEllipse(state.rightTracked ? &trackedDot : &untrackedDot, ctrlRightX - 4.0f, ctrlCenterY - 26.0f, 8.0f, 8.0f);
+        Gdiplus::SolidBrush occludedDot(Gdiplus::Color(255, 255, 195, 60));
+        Gdiplus::SolidBrush untrackedDot(Gdiplus::Color(255, 240, 78, 78));
+
+        auto getDot = [&](bool tracked, bool occluded) -> Gdiplus::Brush* {
+            if (!tracked) return &untrackedDot;
+            if (occluded) return &occludedDot;
+            return &trackedDot;
+        };
+
+        g.FillEllipse(getDot(state.leftTracked, leftOccluded), ctrlLeftX - 5.0f, ctrlCenterY - 26.0f, 10.0f, 10.0f);
+        g.FillEllipse(getDot(state.rightTracked, rightOccluded), ctrlRightX - 5.0f, ctrlCenterY - 26.0f, 10.0f, 10.0f);
 
         // Directional arrows for current pose
         Gdiplus::Pen arrowPen(Gdiplus::Color(255, 83, 217, 255), 4.5f);
@@ -277,27 +299,63 @@ struct VrOverlay::Impl {
             drawRoundedRect(g, waitPen, waitBg, bannerX, bannerY, bannerW, bannerH, 16);
 
             Gdiplus::SolidBrush waitText(Gdiplus::Color(255, 83, 217, 255));
-            g.DrawString(L">> SQUEEZE EITHER TRIGGER WHEN READY <<", -1, &bannerTitleFont,
-                         Gdiplus::RectF(bannerX, bannerY + 40, bannerW, 35), &centerFormat, &waitText);
+            std::wstring waitTitle;
+            if (step > 0 && state.feedback.find("Could not see") == std::string::npos && state.feedback.find("did not agree") == std::string::npos) {
+                waitTitle = L"\u2713 POSE " + std::to_wstring(step) + L" COMPLETE! SQUEEZE TRIGGER FOR POSE " + std::to_wstring(step + 1);
+            } else {
+                waitTitle = L">> SQUEEZE EITHER TRIGGER WHEN READY <<";
+            }
+            g.DrawString(waitTitle.c_str(), -1, &bannerTitleFont,
+                         Gdiplus::RectF(bannerX, bannerY + 38, bannerW, 35), &centerFormat, &waitText);
 
-            std::wstring waitSub = L"Take your time getting into position. Capture will not start until you squeeze a trigger.";
+            std::wstring waitSub;
             if (!state.feedback.empty() && state.feedback.find("Could not see") != std::string::npos) {
                 waitSub = L"Wrists were occluded. Adjust your stance and squeeze trigger to retry this pose (earlier poses kept).";
+            } else if (step > 0) {
+                waitSub = L"Position controllers as shown above for " + poseTitles[step] + L", then squeeze trigger.";
+            } else {
+                waitSub = L"Take your time getting into position. Capture will not start until you squeeze a trigger.";
             }
             g.DrawString(waitSub.c_str(), -1, &bannerSubFont,
-                         Gdiplus::RectF(bannerX + 30, bannerY + 85, bannerW - 60, 45), &centerFormat, &grayBrush);
+                         Gdiplus::RectF(bannerX + 30, bannerY + 82, bannerW - 60, 45), &centerFormat, &grayBrush);
         } else if (state.collecting) {
             // Actively capturing wrists (holding still)
-            Gdiplus::SolidBrush captBg(Gdiplus::Color(255, 14, 46, 26));
-            Gdiplus::Pen captPen(Gdiplus::Color(255, 38, 120, 68), 2.0f);
+            bool moving = (state.leftStatus.find("moving") != std::string::npos ||
+                           state.rightStatus.find("moving") != std::string::npos);
+
+            int minSamples = std::min(state.leftSamples, state.rightSamples);
+            float sampleFraction = std::clamp(float(minSamples) / 12.0f, 0.05f, 1.0f);
+
+            bool alert = (leftOccluded || rightOccluded || moving);
+            Gdiplus::Color bgColor = alert ? Gdiplus::Color(255, 48, 32, 14) : Gdiplus::Color(255, 14, 46, 26);
+            Gdiplus::Color penColor = alert ? Gdiplus::Color(255, 140, 95, 30) : Gdiplus::Color(255, 38, 120, 68);
+            Gdiplus::Color textColor = alert ? Gdiplus::Color(255, 255, 195, 60) : Gdiplus::Color(255, 78, 240, 143);
+
+            Gdiplus::SolidBrush captBg(bgColor);
+            Gdiplus::Pen captPen(penColor, 2.0f);
             drawRoundedRect(g, captPen, captBg, bannerX, bannerY, bannerW, bannerH, 16);
 
-            Gdiplus::SolidBrush captText(Gdiplus::Color(255, 78, 240, 143));
-            std::wstring captTitle = L"HOLD STILL \u2014 CAPTURING WRISTS (" + std::to_wstring(std::max(0, state.secondsRemaining)) + L"s)";
+            Gdiplus::SolidBrush captText(textColor);
+            std::wstring captTitle;
+            std::wstring captSub;
+
+            if (leftOccluded || rightOccluded) {
+                captTitle = L"\u26A0 KINECT CANNOT SEE WRISTS \u2014 ADJUST POSITION";
+                captSub = L"Hold controllers slightly forward and clear of your body so the Kinect camera can see wrists.";
+            } else if (moving) {
+                captTitle = L"\u26A0 MOVEMENT DETECTED \u2014 HOLD STILL (" + std::to_wstring(minSamples) + L"/12 samples)";
+                captSub = L"Pause and hold hands completely steady in position.";
+            } else if (state.secondsRemaining <= 0 && minSamples < 12) {
+                captTitle = L"KEEP HOLDING STILL \u2014 FINALIZING SAMPLES (" + std::to_wstring(minSamples) + L"/12)";
+                captSub = L"Almost done! Keep controllers steady until step advances automatically.";
+            } else {
+                captTitle = L"HOLD STILL \u2014 CAPTURING WRISTS (" + std::to_wstring(minSamples) + L"/12 samples)";
+                captSub = L"Left: " + std::to_wstring(state.leftSamples) + L"/12 \u2022 Right: " + std::to_wstring(state.rightSamples) + L"/12 steady samples recorded.";
+            }
+
             g.DrawString(captTitle.c_str(), -1, &bannerTitleFont,
                          Gdiplus::RectF(bannerX, bannerY + 30, bannerW, 35), &centerFormat, &captText);
-
-            g.DrawString(L"Hold steady! Measuring 3D controller and camera wrist offsets...", -1, &bannerSubFont,
+            g.DrawString(captSub.c_str(), -1, &bannerSubFont,
                          Gdiplus::RectF(bannerX, bannerY + 70, bannerW, 25), &centerFormat, &grayBrush);
 
             // Progress bar
@@ -308,9 +366,8 @@ struct VrOverlay::Impl {
             Gdiplus::SolidBrush barBg(Gdiplus::Color(255, 10, 28, 18));
             drawRoundedRect(g, Gdiplus::Pen(Gdiplus::Color(0,0,0,0)), barBg, barX, barY, barW, barH, 9);
 
-            float fraction = std::clamp((3.0f - float(state.secondsRemaining)) / 3.0f, 0.05f, 1.0f);
-            Gdiplus::SolidBrush fillBrush(Gdiplus::Color(255, 78, 240, 143));
-            drawRoundedRect(g, Gdiplus::Pen(Gdiplus::Color(0,0,0,0)), fillBrush, barX, barY, barW * fraction, barH, 9);
+            Gdiplus::SolidBrush fillBrush(textColor);
+            drawRoundedRect(g, Gdiplus::Pen(Gdiplus::Color(0,0,0,0)), fillBrush, barX, barY, barW * sampleFraction, barH, 9);
         } else {
             // Settling state (3s countdown)
             Gdiplus::SolidBrush settleBg(Gdiplus::Color(255, 48, 38, 14));
@@ -346,6 +403,35 @@ struct VrOverlay::Impl {
         }
 
         if (!ensureOverlay()) return;
+
+        bool changed = (!visible_ ||
+                        lastStep_ != state.step ||
+                        lastSeconds_ != state.secondsRemaining ||
+                        lastWaiting_ != state.waitingForReady ||
+                        lastCollecting_ != state.collecting ||
+                        lastDone_ != state.done ||
+                        lastSuccess_ != state.success ||
+                        lastLeftSamples_ != state.leftSamples ||
+                        lastRightSamples_ != state.rightSamples ||
+                        lastLeftStatus_ != state.leftStatus ||
+                        lastRightStatus_ != state.rightStatus ||
+                        lastLeftTracked_ != state.leftTracked ||
+                        lastRightTracked_ != state.rightTracked);
+
+        if (!changed) return;
+
+        lastStep_ = state.step;
+        lastSeconds_ = state.secondsRemaining;
+        lastWaiting_ = state.waitingForReady;
+        lastCollecting_ = state.collecting;
+        lastDone_ = state.done;
+        lastSuccess_ = state.success;
+        lastLeftSamples_ = state.leftSamples;
+        lastRightSamples_ = state.rightSamples;
+        lastLeftStatus_ = state.leftStatus;
+        lastRightStatus_ = state.rightStatus;
+        lastLeftTracked_ = state.leftTracked;
+        lastRightTracked_ = state.rightTracked;
 
         // Render the card into pixelBuffer_
         render(state);

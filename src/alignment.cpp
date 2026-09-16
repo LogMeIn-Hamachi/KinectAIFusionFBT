@@ -222,7 +222,7 @@ AlignmentCue GuidedAlignment::cue(double time)const {
 }
 std::string GuidedAlignment::feedback()const{return done_?result_.reason:!retryReason_.empty()?retryReason_:!captureStart_?"Approximate positions are fine. Keep wrists visible and hold the controllers normally.\nNo capture until you press a trigger or Capture pose.":sessions_[stage_].feedback();}
 void GuidedAlignment::writeCsv(std::ostream& out)const{for(int i=0;i<5;++i)sessions_[i].writeCsv(out,candidate_,i==0);}
-void GuidedAlignment::add(const Frame& frame,uint32_t id,const Settings& settings) {
+void GuidedAlignment::add(const Frame& frame,uint32_t id,const Settings& settings,const PosePrior* prior) {
     if(done_)return;
     floor_.add(frame.host,frame.floor);
     bool available=false,pressed=false;
@@ -246,7 +246,7 @@ void GuidedAlignment::add(const Frame& frame,uint32_t id,const Settings& setting
     // One wrist convention throughout fit and check; switching between SDK and
     // learned wrist centres would itself change the attachment being calibrated.
     if(!reference_.rawReferenceValid && size()==0)bindTrackingReference(reference_,frame.vr);
-    session.add(frame,id,settings,nullptr,&reference_);
+    session.add(frame,id,settings,prior,&reference_);
     std::array<int,3> count{};std::array<double,3> first{},last{};
     for(auto& s:session.samples()) {
         if(!count[s.device])first[s.device]=s.host;
