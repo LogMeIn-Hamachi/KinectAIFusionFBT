@@ -84,6 +84,25 @@ int main(){try {
         check(waiting.instruction.find("Palms")==std::string::npos,"Complicated palm pose instruction retained");
     }
     check(!alignmentCue(4,8,true).collecting,"Calibration collects after completion");
+    {
+        Q currentRot{1, 0, 0, 0};
+        Q targetRot = axisAngle({0, 1, 0}, 1.5707963);
+        check(angleBetween(currentRot, targetRot) > 1.5, "Rotation distance setup invalid");
+        double dt = 1.0 / 90.0;
+        double currentAngSpeed = 0.0;
+        for (int frame = 0; frame < 10; ++frame) {
+            targetRot = continuous(targetRot, currentRot);
+            double angDist = angleBetween(currentRot, targetRot);
+            double rawAngSpeed = angDist / dt;
+            double angSpeedAlpha = 1.0 - std::exp(-dt / 0.030);
+            currentAngSpeed += (rawAngSpeed - currentAngSpeed) * angSpeedAlpha;
+            double fcRot = std::clamp(8.0 + 4.0 * currentAngSpeed, 8.0, 32.0);
+            double tauRot = 1.0 / (2.0 * pi * fcRot);
+            double alphaRot = 1.0 - std::exp(-dt / tauRot);
+            currentRot = normalized(blend(currentRot, targetRot, alphaRot));
+        }
+        check(angleBetween(currentRot, targetRot) < 0.05, "Driver rotation filter froze or failed to converge");
+    }
     HMODULE dll=LoadLibraryW(L"driver_kinect_fbt.dll");check(dll!=nullptr,"SteamVR driver DLL cannot load");
     using Factory=void*(*)(const char*,int*);auto factory=reinterpret_cast<Factory>(GetProcAddress(dll,"HmdDriverFactory"));
     check(factory!=nullptr,"Missing SteamVR driver factory");int error=0;

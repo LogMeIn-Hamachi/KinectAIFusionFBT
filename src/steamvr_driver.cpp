@@ -80,12 +80,12 @@ public:
                     double alpha=1.0-std::exp(-dt/tau);
                     currentPos_+=(targetPos-currentPos_)*alpha;
 
-                    targetRot=kf::continuous(currentRot_,targetRot);
+                    targetRot=kf::continuous(targetRot,currentRot_);
                     double angDist=kf::angleBetween(currentRot_,targetRot);
                     double rawAngSpeed=angDist/dt;
                     double angSpeedAlpha=1.0-std::exp(-dt/0.030);
                     currentAngSpeed_+=(rawAngSpeed-currentAngSpeed_)*angSpeedAlpha;
-                    double fcRot=std::clamp(6.0+3.0*currentAngSpeed_,6.0,28.0);
+                    double fcRot=std::clamp(8.0+4.0*currentAngSpeed_,8.0,32.0);
                     double tauRot=1.0/(2.0*kf::pi*fcRot);
                     double alphaRot=1.0-std::exp(-dt/tauRot);
                     currentRot_=kf::normalized(kf::blend(currentRot_,targetRot,alphaRot));
