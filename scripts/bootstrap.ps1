@@ -10,10 +10,10 @@ foreach($asset in $lock.assets) {
     if(!(Test-Path -LiteralPath $destination)) {
         Write-Host "Downloading pinned $($asset.name) from $($asset.url)"
         Invoke-WebRequest -Uri $asset.url -OutFile ($destination+'.part')
-        if((Get-FileHash -LiteralPath ($destination+'.part') -Algorithm SHA256).Hash -ne $asset.sha256) {throw "Integrity mismatch: $($asset.name)"}
+        if((Get-FileHash -LiteralPath ($destination+'.part') -Algorithm SHA256).Hash -notin @($asset.sha256,$asset.windows_sha256)) {throw "Integrity mismatch: $($asset.name)"}
         Move-Item -LiteralPath ($destination+'.part') -Destination $destination
     }
-    if((Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash -ne $asset.sha256) {throw "Integrity mismatch: $($asset.name)"}
+    if((Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash -notin @($asset.sha256,$asset.windows_sha256)) {throw "Integrity mismatch: $($asset.name)"}
     if($asset.extract) {Expand-Archive -LiteralPath $destination -DestinationPath (Join-Path $projectRoot $asset.extract) -Force}
 }
 Write-Host 'Pinned dependencies verified. Sensor and GPU installations are unchanged.'

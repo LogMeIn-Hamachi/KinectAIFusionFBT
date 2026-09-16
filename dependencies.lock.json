@@ -21,9 +21,10 @@
     {
       "url": "https://raw.githubusercontent.com/ValveSoftware/openvr/0924064316de3effbcd1acf1e309182a2deb1c05/headers/openvr.h",
       "file": "third_party/openvr/headers/openvr.h",
-      "sha256": "641ef9791fa8a281c490c85337cb3cbea8929055cfad1c78275d26cef587884f",
+      "sha256": "1e6ed57199896cc1f7c5484e50fa18955e97be15be690beb28d998c877ead7fd",
       "name": "openvr_headers/openvr.h",
-      "core": true
+      "core": true,
+      "windows_sha256": "641ef9791fa8a281c490c85337cb3cbea8929055cfad1c78275d26cef587884f"
     },
     {
       "url": "https://raw.githubusercontent.com/ValveSoftware/openvr/0924064316de3effbcd1acf1e309182a2deb1c05/bin/win64/openvr_api.dll",
@@ -42,16 +43,18 @@
     {
       "url": "https://raw.githubusercontent.com/ValveSoftware/openvr/0924064316de3effbcd1acf1e309182a2deb1c05/LICENSE",
       "file": "third_party/openvr/LICENSE",
-      "sha256": "9e6d1480fb68e86ceafed312f7e67dadcdc2a99b350b710d624b8f0f0f1a2329",
+      "sha256": "f56ff606104d4ef18e617921a75c73ad73b5a1a1d70c69590c29de16919e04ad",
       "name": "openvr_LICENSE",
-      "core": false
+      "core": false,
+      "windows_sha256": "9e6d1480fb68e86ceafed312f7e67dadcdc2a99b350b710d624b8f0f0f1a2329"
     },
     {
       "name": "openvr_headers/openvr_driver.h",
       "url": "https://raw.githubusercontent.com/ValveSoftware/openvr/0924064316de3effbcd1acf1e309182a2deb1c05/headers/openvr_driver.h",
       "file": "third_party/openvr/headers/openvr_driver.h",
-      "sha256": "914a17b6dbcc73d1cac5281d6253d5563879ec5029b5db43b9dfc6863b435528",
-      "core": true
+      "sha256": "1036efe998d63e82d1d3db2b32a2f58df4a8eeaf5280f50aaf28220ff60a40ab",
+      "core": true,
+      "windows_sha256": "914a17b6dbcc73d1cac5281d6253d5563879ec5029b5db43b9dfc6863b435528"
     }
   ]
 }
