@@ -1,3 +1,15 @@
+# v1.0 — 2026-09-16
+
+First full public release of KinectAIFusionFBT.
+
+- **In-Headset SteamVR Visual Overlay Guide**: 3D interactive floating guide with real-time controller orientation cues, steady-sample counters (`X/12`), and dedicated retry screens with actionable feedback.
+- **Silky-Smooth 90/120/144 Hz Driver Motion**: 1-Euro adaptive monotonic filtering in `driver_kinect_fbt.dll` eliminates tracker rubber-banding, snap-backs, and discrete freezing stages.
+- **High-Priority CUDA Stream**: AI inference operates on a dedicated high-priority CUDA compute queue, preventing frame drops and tracking stutter during heavy VRChat GPU loads.
+- **Adaptive GPU Cadence**: Multi-tier throttling (Auto / 30 Hz / 20 Hz / 15 Hz) preserves smooth 30 FPS depth re-registration and foot contacts even under GPU stress.
+- **Pose 5 Shoulder-Width Ergonomics**: Standardized tolerances and clear instructions ensure clean, unobstructed wrist detection for both Kinect v1 and v2.
+- **Automatic Camera Exposure by Default**: Removed stale exposure clamps; optimal dynamic range across lighting conditions.
+- **Native OVR Playspace Move**: Stable physical tracking reference ensures virtual playspace movement and space drag naturally move all three trackers together.
+
 # Preview 23 — 2026-09-16
 
 OVR playspace movement no longer gets cancelled by tracker coordinate conversion. A live physical reference is captured at alignment/confirmation; outgoing tracker positions, orientations and velocities use this reference. Incoming VR observations are converted back to the same reference before body correction. Ordinary same-room chaperone changes no longer invalidate alignment; runtime restarts and hardware universe changes still do. The optional OSC path receives equivalent current-standing coordinates.

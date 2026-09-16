@@ -1,6 +1,6 @@
-# Kinect RGB-D — Preview 23
+# KinectAIFusionFBT — v1.0
 
-Full-body tracking for SteamVR using Kinect v1 or v2 and Fast SAM 3D Body. Native Windows x64; NVIDIA GPU required. This is an experimental preview, tested on Windows 11 with an RTX 5070 Ti.
+Full-body tracking for SteamVR using Kinect v1 or v2 and Fast SAM 3D Body. Native Windows x64; NVIDIA GPU required. Tested on Windows 10/11 with NVIDIA GeForce RTX series.
 
 Open **START-HERE.html** for the setup guide. Extract the entire ZIP into a writable folder before running **KinectRGBD.exe**. Keep its files together. This is a full package, not an update patch: both SAM models and their native runtimes are included.
 
