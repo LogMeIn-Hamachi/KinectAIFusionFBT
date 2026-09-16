@@ -10,13 +10,9 @@ class Device final:public vr::ITrackedDeviceServerDriver {
     std::mutex mutex_;
     int role_;
     kf::V3 currentPos_{};
-    kf::V3 currentVel_{};
     kf::Q currentRot_{1, 0, 0, 0};
-    kf::V3 currentAngVel_{};
-    kf::V3 errorOffsetPos_{};
-    kf::Q errorOffsetRot_{1, 0, 0, 0};
-    double errorStartTime_{0};
-    double lastPacketPublished_{0};
+    double currentSpeed_{0};
+    double currentAngSpeed_{0};
     double lastTime_{0};
     bool initialized_{false};
 public:
@@ -58,68 +54,50 @@ public:
         if(p.poseIsValid) {
             kf::V3 targetPos{in.position[0],in.position[1],in.position[2]};
             kf::Q targetRot{in.rotation[0],in.rotation[1],in.rotation[2],in.rotation[3]};
-            kf::V3 targetVel{in.velocity[0],in.velocity[1],in.velocity[2]};
-            kf::V3 targetAngVel{in.angularVelocity[0],in.angularVelocity[1],in.angularVelocity[2]};
-
-            auto angDelta=[](kf::V3 w,double dt) -> kf::Q {
-                double speed=kf::norm(w);
-                if(speed<1e-6 || dt<=0.0)return {1,0,0,0};
-                return kf::axisAngle(w/speed,speed*dt);
-            };
 
             if(!initialized_ || time-lastTime_>0.25 || time<lastTime_) {
                 currentPos_=targetPos;
-                currentVel_=targetVel;
                 currentRot_=targetRot;
-                currentAngVel_=targetAngVel;
-                errorOffsetPos_={};
-                errorOffsetRot_={1,0,0,0};
-                errorStartTime_=time;
-                lastPacketPublished_=packet.published;
+                currentSpeed_=0.0;
+                currentAngSpeed_=0.0;
                 initialized_=true;
             } else {
-                // When a fresh packet arrives from the engine, capture the prediction discrepancy
-                // between our previous trajectory and the new target.
-                if(packet.published>lastPacketPublished_+1e-5) {
-                    double dtPacket=std::clamp(time-packet.published,0.0,0.10);
-                    kf::V3 predictedNewPos=targetPos+targetVel*dtPacket;
-                    kf::Q predictedNewRot=kf::normalized(angDelta(targetAngVel,dtPacket)*targetRot);
+                double dt=std::clamp(time-lastTime_,0.001,0.050);
+                double dist=kf::norm(targetPos-currentPos_);
+                if(dist>0.35) {
+                    currentPos_=targetPos;
+                    currentRot_=targetRot;
+                    currentSpeed_=0.0;
+                    currentAngSpeed_=0.0;
+                } else {
+                    // Adaptive 1st-order low-pass filter (1-Euro style exponential smoothing):
+                    // Strictly monotonic approach without spring oscillation, overshoot, or rubber-banding.
+                    double rawSpeed=dist/dt;
+                    double speedAlpha=1.0-std::exp(-dt/0.030);
+                    currentSpeed_+=(rawSpeed-currentSpeed_)*speedAlpha;
+                    double fc=std::clamp(6.0+16.0*currentSpeed_,6.0,28.0);
+                    double tau=1.0/(2.0*kf::pi*fc);
+                    double alpha=1.0-std::exp(-dt/tau);
+                    currentPos_+=(targetPos-currentPos_)*alpha;
 
-                    kf::V3 rawError=currentPos_-predictedNewPos;
-                    if(kf::norm(rawError)<0.25) {
-                        errorOffsetPos_=rawError;
-                        errorOffsetRot_=kf::continuous(currentRot_,predictedNewRot)*predictedNewRot.conjugate();
-                        errorStartTime_=time;
-                    } else {
-                        errorOffsetPos_={};
-                        errorOffsetRot_={1,0,0,0};
-                    }
-                    lastPacketPublished_=packet.published;
+                    targetRot=kf::continuous(currentRot_,targetRot);
+                    double angDist=kf::angleBetween(currentRot_,targetRot);
+                    double rawAngSpeed=angDist/dt;
+                    double angSpeedAlpha=1.0-std::exp(-dt/0.030);
+                    currentAngSpeed_+=(rawAngSpeed-currentAngSpeed_)*angSpeedAlpha;
+                    double fcRot=std::clamp(6.0+3.0*currentAngSpeed_,6.0,28.0);
+                    double tauRot=1.0/(2.0*kf::pi*fcRot);
+                    double alphaRot=1.0-std::exp(-dt/tauRot);
+                    currentRot_=kf::normalized(kf::blend(currentRot_,targetRot,alphaRot));
                 }
-
-                // Linear dead-reckoning: advance continuously along target velocity.
-                double dtFromPub=std::clamp(time-packet.published,0.0,0.10);
-                kf::V3 linearPos=targetPos+targetVel*dtFromPub;
-                kf::Q linearRot=kf::normalized(angDelta(targetAngVel,dtFromPub)*targetRot);
-
-                // Smooth Hermite blend to dissolve error offset over 40 ms (zero jump, zero rubber-banding).
-                constexpr double blendWindow=0.040;
-                double elapsed=time-errorStartTime_;
-                double decay=(elapsed>=0.0 && elapsed<blendWindow)?(1.0-elapsed/blendWindow):0.0;
-                double smoothDecay=decay*decay*(3.0-2.0*decay);
-
-                currentPos_=linearPos+errorOffsetPos_*smoothDecay;
-                currentRot_=kf::normalized(kf::blend(linearRot,errorOffsetRot_*linearRot,smoothDecay));
-                currentVel_=targetVel;
-                currentAngVel_=targetAngVel;
             }
             lastTime_=time;
 
             p.poseTimeOffset=0.0;
             p.vecPosition[0]=currentPos_.x;p.vecPosition[1]=currentPos_.y;p.vecPosition[2]=currentPos_.z;
-            p.vecVelocity[0]=currentVel_.x;p.vecVelocity[1]=currentVel_.y;p.vecVelocity[2]=currentVel_.z;
+            p.vecVelocity[0]=0.0;p.vecVelocity[1]=0.0;p.vecVelocity[2]=0.0;
             p.qRotation={currentRot_.w,currentRot_.x,currentRot_.y,currentRot_.z};
-            p.vecAngularVelocity[0]=currentAngVel_.x;p.vecAngularVelocity[1]=currentAngVel_.y;p.vecAngularVelocity[2]=currentAngVel_.z;
+            p.vecAngularVelocity[0]=0.0;p.vecAngularVelocity[1]=0.0;p.vecAngularVelocity[2]=0.0;
         } else {
             initialized_=false;
         }

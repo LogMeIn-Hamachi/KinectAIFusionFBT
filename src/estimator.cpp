@@ -1,9 +1,6 @@
 #include "core.hpp"
 #include "body_tracker.hpp"
 namespace kf {
-static double angleBetween(Q a, Q b) {
-    return 2 * std::acos(std::clamp(std::abs(dot(a, b)), 0.0, 1.0));
-}
 V3 LearnedPositionFilter::update(V3 observation,double time,double restTau) {
     if(!finite(observation) || !std::isfinite(time))return value;
     double dt=time-host;

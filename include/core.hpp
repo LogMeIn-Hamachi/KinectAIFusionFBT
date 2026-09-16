@@ -98,6 +98,9 @@ inline Q blend(Q a, Q b, double t) {
     return normalized(
         {a.w * (1 - t) + b.w * t, a.x * (1 - t) + b.x * t, a.y * (1 - t) + b.y * t, a.z * (1 - t) + b.z * t});
 }
+inline double angleBetween(Q a, Q b) {
+    return 2.0 * std::acos(std::clamp(std::abs(dot(a, b)), 0.0, 1.0));
+}
 inline Q axisAngle(V3 axis, double angle) {
     axis = unit(axis);
     double s = std::sin(angle / 2);
