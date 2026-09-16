@@ -464,10 +464,15 @@ void Engine::processLoop() {
         bool collectingBody = false;
         bool samReplayNotice=false;
         std::optional<Sam3dPrediction> lastSamPrediction;
+        std::optional<Sam3dPrediction> prevSamPrediction;
         std::optional<BodyPrediction> lastNlfPrediction;
+        std::optional<BodyPrediction> prevNlfPrediction;
         double lastInferenceHost = 0;
+        double prevInferenceHost = 0;
+        double prevNlfInferenceHost = 0;
         uint64_t inferenceFrameCount = 0;
         int autoThrottleRemaining = 0;
+        int autoThrottleLevel = 0;
         double lastMeasuredInferenceMs = 0;
         while (run_) {
             auto next = measurements_.pop(!view().replay);
@@ -510,8 +515,12 @@ void Engine::processLoop() {
                 lastEpoch = frame->epoch;
                 lastCrop.reset();
                 lastSamPrediction.reset();
+                prevSamPrediction.reset();
                 lastNlfPrediction.reset();
+                prevNlfPrediction.reset();
                 lastInferenceHost = 0;
+                prevInferenceHost = 0;
+                prevNlfInferenceHost = 0;
             }
             if (frame->depthId == lastDepth)
                 continue;
@@ -523,8 +532,12 @@ void Engine::processLoop() {
                 collectingBody=false;{std::lock_guard l(mutex_);view_.bodyCollecting=false;}
                 lastCrop.reset();
                 lastSamPrediction.reset();
+                prevSamPrediction.reset();
                 lastNlfPrediction.reset();
+                prevNlfPrediction.reset();
                 lastInferenceHost = 0;
+                prevInferenceHost = 0;
+                prevNlfInferenceHost = 0;
             }
             estimator.settings = config.settings;
             if (config.replay && frame->runConfig)
@@ -540,8 +553,12 @@ void Engine::processLoop() {
                     {std::lock_guard l(mutex_);view_.bodyCollecting=false;}
                     lastCrop.reset();
                     lastSamPrediction.reset();
+                    prevSamPrediction.reset();
                     lastNlfPrediction.reset();
+                    prevNlfPrediction.reset();
                     lastInferenceHost = 0;
+                    prevInferenceHost = 0;
+                    prevNlfInferenceHost = 0;
                     message("Player recovered after Kinect changed its body ID; headset and both controllers "
                             "matched.");
                 } else
@@ -572,15 +589,27 @@ void Engine::processLoop() {
             } else if (cadence == 3) {
                 shouldInfer = (inferenceFrameCount % 2 != 0); // 15 Hz (1 of 2)
             } else {
-                // Auto: throttle to 15 Hz when inference > 24ms or queue > 12ms
-                if (lastMeasuredInferenceMs > 24.0 || config.queueMs > 12.0) {
+                // Auto: graduated throttling based on GPU contention.
+                // 30 Hz frame budget is 33.3ms. SAM on RTX 5070 Ti takes ~22-26ms.
+                // Level 2 (15 Hz): severe contention (inference > 32ms or queue > 20ms)
+                // Level 1 (20 Hz): moderate contention (inference > 28.5ms or queue > 14ms)
+                if (lastMeasuredInferenceMs > 32.0 || config.queueMs > 20.0) {
+                    autoThrottleLevel = 2; // 15 Hz
+                    autoThrottleRemaining = 30;
+                } else if (lastMeasuredInferenceMs > 28.5 || config.queueMs > 14.0) {
+                    if (autoThrottleLevel < 1) autoThrottleLevel = 1; // 20 Hz
                     autoThrottleRemaining = 30;
                 }
                 if (autoThrottleRemaining > 0) {
                     --autoThrottleRemaining;
-                    shouldInfer = (inferenceFrameCount % 2 != 0);
+                    if (autoThrottleLevel == 2) {
+                        shouldInfer = (inferenceFrameCount % 2 != 0); // 15 Hz
+                    } else {
+                        shouldInfer = (inferenceFrameCount % 3 != 0); // 20 Hz
+                    }
                 } else {
-                    shouldInfer = true;
+                    autoThrottleLevel = 0;
+                    shouldInfer = true; // 30 Hz full
                 }
             }
             if ((model.ready() || sam.ready() || nlf.ready()) && id && config.settings.inference && config.settings.baseline == 0 &&
@@ -592,15 +621,30 @@ void Engine::processLoop() {
                         auto camera=sam3dCamera(fitColorProjection(*frame));
                         if(camera.valid) {
                             if (shouldInfer || !lastNlfPrediction || frame->host - lastInferenceHost > 0.12) {
+                                prevNlfPrediction = lastNlfPrediction;
+                                prevNlfInferenceHost = lastInferenceHost;
                                 lastNlfPrediction = nlf.infer(*frame, *lastCrop, camera);
                                 lastInferenceHost = frame->host;
                                 inferenceMs = (now() - begin) * 1000;
                                 lastMeasuredInferenceMs = inferenceMs;
                             }
                             if (lastNlfPrediction) {
-                                samOverlay = kinectImageLabels(lastNlfPrediction->landmarks);
                                 auto pred = *lastNlfPrediction;
                                 pred.host = frame->host;
+                                double dtInfer = lastInferenceHost - prevNlfInferenceHost;
+                                double dtSkip = frame->host - lastInferenceHost;
+                                if (!shouldInfer && prevNlfPrediction && dtInfer > 0.015 && dtInfer < 0.15 && dtSkip > 0 && dtSkip < 0.12) {
+                                    double ratio = std::clamp(dtSkip / dtInfer, 0.0, 1.0);
+                                    for (size_t i = 0; i < pred.landmarks.size(); ++i) {
+                                        V2 imgVel = {lastNlfPrediction->landmarks[i].uv.x - prevNlfPrediction->landmarks[i].uv.x,
+                                                     lastNlfPrediction->landmarks[i].uv.y - prevNlfPrediction->landmarks[i].uv.y};
+                                        double l = std::hypot(imgVel.x, imgVel.y);
+                                        if (l > 250.0 * dtInfer && l > 1e-9) { imgVel.x *= (250.0 * dtInfer / l); imgVel.y *= (250.0 * dtInfer / l); }
+                                        pred.landmarks[i].uv.x += imgVel.x * ratio;
+                                        pred.landmarks[i].uv.y += imgVel.y * ratio;
+                                    }
+                                }
+                                samOverlay = kinectImageLabels(pred.landmarks);
                                 auto evidence = bodyPoseEvidence(*frame, id, pred, camera);
                                 keypoints = evidence.keypoints; learned = evidence.prior;
                             }
@@ -610,15 +654,32 @@ void Engine::processLoop() {
                         if(camera.valid) {
                             if (shouldInfer || !lastSamPrediction || frame->host - lastInferenceHost > 0.12) {
                                 auto crop=*lastCrop;crop.w=crop.h=std::max(crop.w,crop.h);
+                                prevSamPrediction = lastSamPrediction;
+                                prevInferenceHost = lastInferenceHost;
                                 lastSamPrediction = sam.infer(*frame, crop, camera);
                                 lastInferenceHost = frame->host;
                                 inferenceMs = (now() - begin) * 1000;
                                 lastMeasuredInferenceMs = inferenceMs;
                             }
                             if (lastSamPrediction) {
-                                samOverlay=kinectImageLabels(sam3dLandmarks(*lastSamPrediction));
                                 auto pred = *lastSamPrediction;
                                 pred.host = frame->host;
+                                double dtInfer = lastInferenceHost - prevInferenceHost;
+                                double dtSkip = frame->host - lastInferenceHost;
+                                if (!shouldInfer && prevSamPrediction && dtInfer > 0.015 && dtInfer < 0.15 && dtSkip > 0 && dtSkip < 0.12) {
+                                    double ratio = std::clamp(dtSkip / dtInfer, 0.0, 1.0);
+                                    for (int i = 0; i < 70; ++i) {
+                                        V3 vel = lastSamPrediction->cameraPoints[i] - prevSamPrediction->cameraPoints[i];
+                                        pred.cameraPoints[i] += bounded(vel, 3.5 * dtInfer) * ratio;
+                                        V2 imgVel = {lastSamPrediction->imagePoints[i].x - prevSamPrediction->imagePoints[i].x,
+                                                     lastSamPrediction->imagePoints[i].y - prevSamPrediction->imagePoints[i].y};
+                                        double l = std::hypot(imgVel.x, imgVel.y);
+                                        if (l > 250.0 * dtInfer && l > 1e-9) { imgVel.x *= (250.0 * dtInfer / l); imgVel.y *= (250.0 * dtInfer / l); }
+                                        pred.imagePoints[i].x += imgVel.x * ratio;
+                                        pred.imagePoints[i].y += imgVel.y * ratio;
+                                    }
+                                }
+                                samOverlay=kinectImageLabels(sam3dLandmarks(pred));
                                 auto evidence=sam3dEvidence(*frame, id, pred, camera);
                                 keypoints=evidence.keypoints; learned=evidence.prior;
                             }
@@ -671,7 +732,7 @@ void Engine::processLoop() {
             std::string cadenceDesc = cadence == 1 ? "Full (30 Hz)" :
                                       cadence == 2 ? "Balanced (20 Hz)" :
                                       cadence == 3 ? "Low GPU (15 Hz)" :
-                                      (autoThrottleRemaining > 0 ? "Auto (throttled 15 Hz)" : "Auto (30 Hz)");
+                                      (autoThrottleRemaining > 0 ? (autoThrottleLevel == 2 ? "Auto (throttled 15 Hz)" : "Auto (throttled 20 Hz)") : "Auto (30 Hz)");
             view_.cadenceStatus = cadenceDesc;
             view_.poseSource=(sam.ready() || nlf.ready())?(learned && std::any_of(state.learnedPosition.begin(),state.learnedPosition.end(),[](bool b){return b;})?
                 (learned->vrAnchored?poseName+" body + gentle horizontal correction":learned->depthPredicted?poseName+" body / distance estimated ("+std::to_string(int(learned->depthAge*1000))+" ms)":
