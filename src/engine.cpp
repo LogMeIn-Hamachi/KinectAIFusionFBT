@@ -599,7 +599,9 @@ void Engine::processLoop() {
                             }
                             if (lastNlfPrediction) {
                                 samOverlay = kinectImageLabels(lastNlfPrediction->landmarks);
-                                auto evidence = bodyPoseEvidence(*frame, id, *lastNlfPrediction, camera);
+                                auto pred = *lastNlfPrediction;
+                                pred.host = frame->host;
+                                auto evidence = bodyPoseEvidence(*frame, id, pred, camera);
                                 keypoints = evidence.keypoints; learned = evidence.prior;
                             }
                         }
@@ -615,7 +617,9 @@ void Engine::processLoop() {
                             }
                             if (lastSamPrediction) {
                                 samOverlay=kinectImageLabels(sam3dLandmarks(*lastSamPrediction));
-                                auto evidence=sam3dEvidence(*frame, id, *lastSamPrediction, camera);
+                                auto pred = *lastSamPrediction;
+                                pred.host = frame->host;
+                                auto evidence=sam3dEvidence(*frame, id, pred, camera);
                                 keypoints=evidence.keypoints; learned=evidence.prior;
                             }
                         }
