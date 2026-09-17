@@ -65,7 +65,7 @@ int main() {
                     // Compact wrists: all ahead of the torso, elbows bent, below shoulders.
                     V3 c{side*(stage==2?.32:.25),stage==0||stage==4?1.05:stage==2?1.15:1.25,
                          stage==0||stage==3?1.8:stage==4?1.65:1.7};
-                    Q q=stage==0?axisAngle({1,0,0},-.8*angleScale):stage==2?axisAngle({0,1,0},side*.8*angleScale):stage==3?axisAngle({1,0,0},1.1*angleScale):Q{};
+                    Q q=stage==2?axisAngle({0,1,0},side*.8*angleScale):stage==3?axisAngle({1,0,0},1.1*angleScale):Q{};
                     b.joints[j]={c,1,.01,1};f.vr.devices[d]={truth.apply(c)-q.rotate(expected[d]),q,true};
                     if(stage==4 && badCheck && routine.feedback().find("did not agree")==std::string::npos)f.vr.devices[d].p.x+=.15;
                 }
@@ -113,7 +113,7 @@ int main() {
                     // Compact wrists: all ahead of the torso, elbows bent, below shoulders.
                     V3 c{side*(stage==2?.32:.25),stage==0||stage==4?1.05:stage==2?1.15:1.25,
                          stage==0||stage==3?1.8:stage==4?1.65:1.7};
-                    Q q=stage==0?axisAngle({1,0,0},-.8):stage==2?axisAngle({0,1,0},side*.8):stage==3?axisAngle({1,0,0},1.1):Q{};
+                    Q q=stage==2?axisAngle({0,1,0},side*.8):stage==3?axisAngle({1,0,0},1.1):Q{};
                     q=q*axisAngle(unit(V3{.3,1,.7}),d*.6);
                     auto noise=V3{std::sin(tick*1.7),std::cos(tick*.8),std::sin(tick*.9)}*.007;
                     b.joints[j]={c+noise,1,.01,1};
@@ -177,6 +177,14 @@ int main() {
             f.bodies={recovered};f.vr.devices[1]={{-.3,1,2},{},true};f.vr.devices[2]={{.3,1,2},{},true};
             for(int i=0;i<300;++i){f.host=f.vr.host=f.host+1./30;retry.add(f,42,{});}
             check(retry.stage()==1 && retry.cue(f.host).waitingForReady,"Valid capture after twenty failed retries did not recover");
+            std::string calls;
+            auto upload=[&]{calls+='U';};auto flush=[&]{calls+='F';};
+            auto submit=[&]{calls+='S';return true;};auto show=[&]{calls+='V';return true;};
+            check(presentOverlayFrame(false,upload,submit,flush,show) && calls=="USFV","Overlay GPU work not flushed after submission before initial show");
+            calls.clear();
+            check(presentOverlayFrame(true,upload,submit,flush,show) && calls=="USF","Visible overlay was shown repeatedly");
+            calls.clear();
+            check(!presentOverlayFrame(false,upload,[&]{calls+='S';return false;},flush,show) && calls=="USF","Failed overlay submit skipped GPU flush or showed invalid texture");
             OverlayRefresh refresh;OverlayState state;state.active=true;state.isRetry=true;
             check(refresh.due(state,100),"First overlay frame suppressed");
             refresh.complete(state,100,true);

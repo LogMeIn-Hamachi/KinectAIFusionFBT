@@ -61,6 +61,19 @@ struct VrOverlay::Impl {
     bool hidePending_{};
     OverlayRefresh refresh_;
     double nextHealthCheck_{};
+    uint32_t runtimeToken_{};
+    const std::string key_="kinect_fbt.calibration_guide."+std::to_string(GetCurrentProcessId());
+    std::string lastError_="none";
+    unsigned submissions_{}, failures_{};
+    int displayedStep_{-1};
+    bool gpuResult(HRESULT result,const char* operation) {
+        if(SUCCEEDED(result))return true;
+        lastError_=std::string(operation)+": HRESULT "+std::to_string(result);return false;
+    }
+    bool overlayResult(vr::EVROverlayError result,const char* operation) {
+        if(result==vr::VROverlayError_None)return true;
+        lastError_=std::string(operation)+": OpenVR error "+std::to_string(int(result));return false;
+    }
     Microsoft::WRL::ComPtr<ID3D11Device> device_;
     Microsoft::WRL::ComPtr<ID3D11DeviceContext> context_;
     Microsoft::WRL::ComPtr<ID3D11Texture2D> texture_;
@@ -74,16 +87,17 @@ struct VrOverlay::Impl {
         int adapterIndex=-1;vr::VRSystem()->GetDXGIOutputInfo(&adapterIndex);
         Microsoft::WRL::ComPtr<IDXGIFactory1> factory;
         Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
-        if(adapterIndex<0 || FAILED(CreateDXGIFactory1(IID_PPV_ARGS(factory.GetAddressOf()))) ||
-           FAILED(factory->EnumAdapters1(UINT(adapterIndex),adapter.GetAddressOf())))return false;
-        if(!device_ && FAILED(D3D11CreateDevice(adapter.Get(),D3D_DRIVER_TYPE_UNKNOWN,nullptr,
+        if(adapterIndex<0){lastError_="SteamVR compositor adapter unavailable";return false;}
+        if(!gpuResult(CreateDXGIFactory1(IID_PPV_ARGS(factory.GetAddressOf())),"CreateDXGIFactory1") ||
+           !gpuResult(factory->EnumAdapters1(UINT(adapterIndex),adapter.GetAddressOf()),"EnumAdapters1"))return false;
+        if(!device_ && !gpuResult(D3D11CreateDevice(adapter.Get(),D3D_DRIVER_TYPE_UNKNOWN,nullptr,
             D3D11_CREATE_DEVICE_BGRA_SUPPORT,nullptr,0,D3D11_SDK_VERSION,
-            device_.GetAddressOf(),nullptr,context_.GetAddressOf())))return false;
+            device_.GetAddressOf(),nullptr,context_.GetAddressOf()),"D3D11CreateDevice"))return false;
         D3D11_TEXTURE2D_DESC desc{};
         desc.Width=OverlayWidth;desc.Height=OverlayHeight;desc.MipLevels=1;desc.ArraySize=1;
         desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;desc.SampleDesc.Count=1;
         desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE;
-        return SUCCEEDED(device_->CreateTexture2D(&desc,nullptr,texture_.GetAddressOf()));
+        return gpuResult(device_->CreateTexture2D(&desc,nullptr,texture_.GetAddressOf()),"CreateTexture2D");
     }
 
 
@@ -106,31 +120,40 @@ struct VrOverlay::Impl {
     }
 
     bool ensureOverlay() {
-        if (!vr::VRSystem() || !vr::VROverlay()) {handle_=vr::k_ulOverlayHandleInvalid;visible_=false;return false;}
+        const auto token=vr::VR_GetInitToken();
+        if(token!=runtimeToken_) {
+            runtimeToken_=token;handle_=vr::k_ulOverlayHandleInvalid;visible_=false;
+            refresh_.reset();texture_.Reset();context_.Reset();device_.Reset();
+        }
+        if (!vr::VRSystem() || !vr::VROverlay()) {lastError_="SteamVR interfaces unavailable";handle_=vr::k_ulOverlayHandleInvalid;visible_=false;return false;}
         if (handle_ != vr::k_ulOverlayHandleInvalid) {
             vr::EVROverlayError status=vr::VROverlayError_None;
             char key[128]{};
             vr::VROverlay()->GetOverlayKey(handle_,key,sizeof(key),&status);
-            if(status==vr::VROverlayError_None && std::string(key)=="kinect_fbt.calibration_guide")return true;
+            if(status==vr::VROverlayError_None && std::string(key)==key_)return true;
             handle_=vr::k_ulOverlayHandleInvalid;visible_=false;refresh_.reset();
         }
 
-        vr::EVROverlayError err = vr::VROverlay()->FindOverlay("kinect_fbt.calibration_guide", &handle_);
+        vr::EVROverlayError err = vr::VROverlay()->FindOverlay(key_.c_str(), &handle_);
         if (err != vr::EVROverlayError::VROverlayError_None) {
-            err = vr::VROverlay()->CreateOverlay("kinect_fbt.calibration_guide", "Kinect FBT Calibration Guide", &handle_);
+            err = vr::VROverlay()->CreateOverlay(key_.c_str(), "Kinect FBT Calibration Guide", &handle_);
         }
         if (err == vr::EVROverlayError::VROverlayError_None) {
-            vr::VROverlay()->SetOverlayWidthInMeters(handle_, 1.15f);
-            vr::VROverlay()->SetOverlayAlpha(handle_, 0.96f);
+            if(!overlayResult(vr::VROverlay()->SetOverlayWidthInMeters(handle_,1.15f),"SetOverlayWidth") ||
+               !overlayResult(vr::VROverlay()->SetOverlayAlpha(handle_,.96f),"SetOverlayAlpha")) {
+                vr::VROverlay()->DestroyOverlay(handle_);handle_=vr::k_ulOverlayHandleInvalid;return false;
+            }
             vr::HmdMatrix34_t mat = {
                 1.0f, 0.0f, 0.0f, 0.0f,
                 0.0f, 1.0f, 0.0f, -0.05f,
                 0.0f, 0.0f, 1.0f, -1.25f
             };
-            vr::VROverlay()->SetOverlayTransformTrackedDeviceRelative(handle_, vr::k_unTrackedDeviceIndex_Hmd, &mat);
-            return true;
+            if(!overlayResult(vr::VROverlay()->SetOverlayTransformTrackedDeviceRelative(handle_,vr::k_unTrackedDeviceIndex_Hmd,&mat),"SetOverlayTransform")) {
+                vr::VROverlay()->DestroyOverlay(handle_);handle_=vr::k_ulOverlayHandleInvalid;return false;
+            }
+            refresh_.reset();return true;
         }
-        return false;
+        overlayResult(err,"CreateOverlay");return false;
     }
 
     void hide() {
@@ -237,7 +260,7 @@ struct VrOverlay::Impl {
 
         // Header for diagram
         Gdiplus::SolidBrush diagHeaderBrush(Gdiplus::Color(255, 130, 155, 175));
-        g.DrawString(L"POINTING DIRECTION (NOT ARM HEIGHT)", -1, &diagramFont, Gdiplus::PointF(diagX + 16, diagY + 12), &diagHeaderBrush);
+        g.DrawString(L"MOVE FOREARMS, KEEP WRISTS STRAIGHT", -1, &diagramFont, Gdiplus::PointF(diagX + 16, diagY + 12), &diagHeaderBrush);
 
         // Draw Left & Right controller representations
         float ctrlLeftX = diagX + 75;
@@ -278,14 +301,10 @@ struct VrOverlay::Impl {
         Gdiplus::SolidBrush arrowBrush(Gdiplus::Color(255, 83, 217, 255));
         Gdiplus::SolidBrush arrowTextBrush(Gdiplus::Color(255, 83, 217, 255));
 
-        std::wstring arrowLabels[5] = { L"TILT DOWN", L"POINT TOWARDS CAMERA", L"FORWARD + OUTWARD", L"TILT UP / ELBOWS LOW", L"FORWARD / ABOVE WAIST" };
+        std::wstring arrowLabels[5] = { L"RELAXED FORWARD HOLD", L"EASY FORWARD REACH", L"OPEN FOREARMS SLIGHTLY", L"RAISE FOREARMS / WRISTS STRAIGHT", L"RELAXED FORWARD CHECK" };
         g.DrawString(arrowLabels[step].c_str(), -1, &diagramFont, Gdiplus::RectF(diagX, diagY + 185, diagW, 20), &centerFormat, &arrowTextBrush);
 
-        if (step == 0) {
-            // Point Down
-            drawArrow(g, arrowPen, arrowBrush, ctrlLeftX, ctrlCenterY - 10.0f, ctrlLeftX, ctrlCenterY + 28.0f, 12.0f);
-            drawArrow(g, arrowPen, arrowBrush, ctrlRightX, ctrlCenterY - 10.0f, ctrlRightX, ctrlCenterY + 28.0f, 12.0f);
-        } else if (step == 1 || step == 4) {
+        if (step == 0 || step == 1 || step == 4) {
             // Point Forward (represented as 3D perspective / upward-forward ring)
             drawArrow(g, arrowPen, arrowBrush, ctrlLeftX, ctrlCenterY + 12.0f, ctrlLeftX, ctrlCenterY - 26.0f, 12.0f);
             drawArrow(g, arrowPen, arrowBrush, ctrlRightX, ctrlCenterY + 12.0f, ctrlRightX, ctrlCenterY - 26.0f, 12.0f);
@@ -477,19 +496,18 @@ struct VrOverlay::Impl {
             for(int i=0;i<64 && vr::VROverlay()->PollNextOverlayEvent(handle_,&event,sizeof(event));++i){}
         }
         if(!refresh_.due(state,now))return;
-        if(!ensureOverlay() || !ensureTexture()){refresh_.complete(state,now,false);return;}
+        if(!ensureOverlay() || !ensureTexture()){++failures_;refresh_.complete(state,now,false);return;}
         hidePending_=true;
         render(state);
-        context_->UpdateSubresource(texture_.Get(),0,nullptr,pixelBuffer_.data(),OverlayWidth*4,0);
-        context_->Flush();
         vr::Texture_t image{texture_.Get(),vr::TextureType_DirectX,vr::ColorSpace_Gamma};
         auto* overlay=vr::VROverlay();
-        bool success=overlay && overlay->SetOverlayTexture(handle_,&image)==vr::VROverlayError_None;
-        // Repeated ShowOverlay calls are unnecessary for an already visible card.
-        if(success && !visible_) {
-            success=overlay->ShowOverlay(handle_)==vr::VROverlayError_None;
-            if(success)visible_=true;
-        }
+        const bool success=presentOverlayFrame(visible_,
+            [&]{context_->UpdateSubresource(texture_.Get(),0,nullptr,pixelBuffer_.data(),OverlayWidth*4,0);},
+            [&]{return overlay && overlayResult(overlay->SetOverlayTexture(handle_,&image),"SetOverlayTexture");},
+            [&]{context_->Flush();},
+            [&]{return overlayResult(overlay->ShowOverlay(handle_),"ShowOverlay");});
+        if(success){visible_=true;++submissions_;displayedStep_=state.done?5:state.step;}
+        else ++failures_;
         refresh_.complete(state,now,success);
         // A failed update leaves the last visible texture in place until retry.
 
@@ -514,4 +532,13 @@ bool VrOverlay::isVisible() const {
     return impl_ && impl_->visible_;
 }
 
+std::string VrOverlay::diagnostics() const {
+    std::lock_guard lock(mutex_);
+    if(!impl_)return "overlay=unavailable\n";
+    return "overlay_visible="+std::to_string(impl_->visible_)+
+        "\noverlay_submissions="+std::to_string(impl_->submissions_)+
+        "\noverlay_failures="+std::to_string(impl_->failures_)+
+        "\noverlay_displayed_step="+std::to_string(impl_->displayedStep_)+
+        "\noverlay_last_error="+impl_->lastError_+"\n";
+}
 } // namespace kf

@@ -48,6 +48,16 @@ public:
     void reset(){*this={};}
 };
 
+// SteamVR may enqueue GPU copy work during submit. Flush that work even when
+// submission fails, and only show a hidden overlay after a successful submit.
+template<class Upload,class Submit,class Flush,class Show>
+bool presentOverlayFrame(bool visible,Upload upload,Submit submit,Flush flush,Show show) {
+    upload();
+    const bool submitted=submit();
+    flush();
+    return submitted && (visible || show());
+}
+
 class VrOverlay {
     mutable std::mutex mutex_;
     struct Impl;
@@ -60,6 +70,7 @@ public:
     void update(const OverlayState& state);
     void hide();
     bool isVisible() const;
+    std::string diagnostics() const;
 };
 
 } // namespace kf

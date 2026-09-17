@@ -897,6 +897,7 @@ void Engine::exportDiagnostics() {
     auto s = view();
     std::filesystem::create_directories(root_ / "diagnostics");
     std::ofstream f(root_ / "diagnostics/status.txt");
+    if(overlay_)f<<overlay_->diagnostics();
     f << "Kinect RGB-D 0.1.0 experimental\n"
       << s.sensor << '\n'
       << "exposure_preference=" << (s.prefer30?"prefer-30":"auto") << '\n'

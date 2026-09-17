@@ -170,16 +170,16 @@ void AlignmentSession::writeCsv(std::ostream &out, const Calibration &cal,bool h
     }
 }
 std::string alignmentPoseTitle(int step) {
-    constexpr const char* titles[]{"Low Forward / Tilt Down", "Easy Forward Reach", "Open Slightly / Turn Out", "Elbows Low / Tilt Up", "Check / Lower Forward Reach"};
+    constexpr const char* titles[]{"Relaxed Forward Hold", "Easy Forward Reach", "Open Your Forearms", "Bend Elbows / Raise Forearms", "Check / Lower Forward Reach"};
     return titles[std::clamp(step,0,calibrationPoseCount-1)];
 }
 std::string alignmentPoseInstruction(int step) {
     constexpr const char* poses[]{
-        "Hands just above waist height, shoulder-width apart, a handspan in front of you. Tilt controllers diagonally down. Keep elbows relaxed.",
-        "Lift hands to lower chest height and reach a little farther forward. Keep elbows bent and hands shoulder-width apart. Point towards the camera.",
-        "Lower hands slightly. Open them just outside shoulder width, still well in front of you. Point diagonally forwards and outwards, not sideways.",
-        "Bring hands back to shoulder width at lower chest height, a handspan forward. Tilt controllers up; keep elbows down and hands below shoulders.",
-        "Check: lower hands to just above your waist and reach a little farther forward than pose 1. Keep shoulder width and point towards the camera."};
+        "Hold controllers normally, hands just above waist height and shoulder-width apart. Bend elbows, forearms forward, wrists straight. Do not point down.",
+        "Reach a little farther forward at lower chest height. Keep elbows slightly bent and hands shoulder-width apart. Keep the same relaxed grip.",
+        "Open your forearms out a little, like holding two bicycle handles. Keep hands ahead of you, just wider than shoulders. Turn from your elbows, not your wrists.",
+        "Bend your elbows more to raise your forearms, like lifting two mugs. Keep wrists straight, elbows low and hands below shoulders, clear of your chest.",
+        "Check: return to a relaxed forward hold just above your waist. Reach a little farther than pose 1, hands shoulder-width apart. Keep wrists straight."};
     return poses[std::clamp(step,0,calibrationPoseCount-1)];
 }
 AlignmentCue alignmentCue(int step,double elapsed,bool done,bool waiting) {
