@@ -2,6 +2,36 @@
 #include "core.hpp"
 #include <ostream>
 namespace kf {
+// An accepted transform survives temporary loss and cancelled calibration.
+// Its live reference must not be rebound silently after a real VR origin change.
+class SavedAlignment {
+    Calibration saved_;
+    bool accepted_{};
+public:
+    void remember(const Calibration& cal,bool accepted=true){saved_=cal;accepted_=accepted;}
+    void invalidate(){accepted_=false;}
+    void forgetLiveReference(){saved_.rawReferenceValid=false;}
+    bool available() const{return accepted_;}
+    Calibration confirm(const VrSample& vr) const {
+        auto out=saved_;out.valid=false;
+        if(!accepted_)out.reason="No accepted alignment is saved for this Kinect. Run Align to VR.";
+        else if(!finiteRigid(out.transform) || !std::isfinite(out.spread) || out.spread<.07 ||
+                !std::isfinite(out.rms) || out.rms<0 || out.rms>=calibrationMaxRms)
+            out.reason="The saved alignment failed its quality checks. Run Align to VR.";
+        else if(!vr.rawTransformValid || !finiteRigid(vr.standingToRaw))
+            out.reason="Saved alignment is available. Wake or reconnect SteamVR, then confirm again.";
+        else if(out.rawReferenceValid && out.rawEpoch!=vr.epoch)
+            out.reason="SteamVR restarted or its physical tracking origin changed. The saved alignment cannot be verified; run Align to VR.";
+        else {
+            const bool restored=!out.rawReferenceValid;
+            if(restored)bindTrackingReference(out,vr);
+            out.valid=true;
+            out.reason=restored?"Saved alignment confirmed. This assumes the Kinect stayed fixed and OVR offsets were reset before confirmation.":
+                "Previous alignment confirmed in the same SteamVR reference. No new poses needed.";
+        }
+        return out;
+    }
+};
 class StableFloor {
     std::deque<std::pair<double,Plane>> samples_;
 public:

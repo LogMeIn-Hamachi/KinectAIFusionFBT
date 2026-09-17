@@ -226,6 +226,40 @@ int main() {
         check(!loadCalibration(path,restored,restoredSettings,&known) && known,"Learned offsets survive camera alignment invalidation");
         saveCalibration(path,held,settings,false);loadCalibration(path,restored,restoredSettings,&known);
         check(!known,"Unknown offsets do not silently enable quick alignment");
+        {
+            Calibration accepted;accepted.valid=true;accepted.spread=.2;accepted.rms=.025;
+            accepted.transform={axisAngle({0,1,0},.3),{.4,.1,-1}};
+            VrSample vr;vr.epoch=9;vr.rawTransformValid=true;
+            vr.standingToRaw={axisAngle({0,1,0},-.2),{1,0,0}};
+            bindTrackingReference(accepted,vr);
+            SavedAlignment saved;saved.remember(accepted);
+            // HMD/controller tracking may disappear while the physical reference
+            // remains valid. Confirming it must not require fresh pose samples.
+            vr.devices={};auto confirmed=saved.confirm(vr);
+            check(confirmed.valid && saved.available(),"Headset removal discarded accepted alignment");
+            check(norm(confirmed.transform.t-accepted.transform.t)<1e-9,"Confirmation changed calibration transform");
+            auto sleeping=vr;sleeping.rawTransformValid=false;
+            check(!saved.confirm(sleeping).valid && saved.available(),"Temporary VR loss discarded saved alignment");
+            check(saved.confirm(vr).valid,"Wake-up in same reference could not restore alignment");
+            auto dragged=vr;dragged.standingToRaw.t.y+=1;
+            confirmed=saved.confirm(dragged);
+            check(confirmed.valid && norm(confirmed.standingToRaw.t-accepted.standingToRaw.t)<1e-9,"Confirmation rebound alignment to virtual space drag");
+            auto restarted=vr;restarted.epoch++;
+            check(!saved.confirm(restarted).valid && saved.confirm(restarted).reason.find("restarted")!=std::string::npos,"Real origin change silently rebound old alignment");
+            // An unfinished/failed attempt operates on a separate live result.
+            auto attempted=accepted;attempted.valid=false;attempted.spread=0;
+            check(saved.confirm(vr).valid,"Unaccepted attempt overwrote saved transform");
+            saved.invalidate();check(!saved.confirm(vr).valid,"Camera/offset invalidation reused stale alignment");
+            saved.remember(accepted);saved.forgetLiveReference();
+            check(saved.confirm(restarted).valid,"Explicit saved confirmation after app/capture restart failed");
+            saved.remember(attempted,false);check(!saved.confirm(vr).valid,"Another sensor reused previous accepted alignment");
+            attempted=accepted;attempted.rms=.2;saved.remember(attempted);
+            check(!saved.confirm(vr).valid,"Bad saved quality accepted");
+            saveCalibration(path,accepted,settings,true);Calibration loaded;
+            check(loadCalibration(path,loaded,restoredSettings),"Accepted alignment failed to reload");
+            saved.remember(loaded);
+            check(saved.confirm(vr).valid,"Disk-loaded accepted alignment could not be confirmed");
+        }
         std::filesystem::remove(path);
         std::cout<<checks<<" controller calibration and motor limit checks passed. No hardware moved.\n";
     } catch(const std::exception &e){std::cerr<<e.what()<<'\n';return 1;}

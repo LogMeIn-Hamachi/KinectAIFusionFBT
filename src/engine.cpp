@@ -26,7 +26,8 @@ Engine::Engine(std::filesystem::path root) : root_(std::move(root)) {
         const char* names[]{"Auto (GPU adaptive)","30 Hz (Full AI)","20 Hz (Balanced)","15 Hz (Low GPU / Heavy VRChat)"};
         view_.cadenceStatus=names[savedCadence];
     }
-    calibrationAccepted_ = loadCalibration(calibrationFile_, view_.calibration, view_.settings,&view_.wristOffsetsReady);
+    const bool accepted=loadCalibration(calibrationFile_, view_.calibration, view_.settings,&view_.wristOffsetsReady);
+    savedAlignment_.remember(view_.calibration,accepted);
 }
 Engine::~Engine() {
     stop();
@@ -90,6 +91,7 @@ void Engine::start(const std::filesystem::path &replay) {
         view_.tiltAngle.reset();view_.tiltPending=false;tiltTarget_.reset();
         view_.calibration.valid = false;
         view_.calibration.rawReferenceValid=false;
+        savedAlignment_.forgetLiveReference();
         view_.notice = "Select and lock the player after a body appears.";
     }
     recorder_ = std::thread(&Engine::recordLoop, this);
@@ -129,7 +131,7 @@ void Engine::settings(Settings s) {
         if (norm(s.deviceOffsets[i] - view_.settings.deviceOffsets[i]) > 1e-9) {
             view_.calibration.valid = false;
             if(i>0)view_.wristOffsetsReady=false;
-            calibrationAccepted_ = false;
+            savedAlignment_.invalidate();
             view_.collecting = false;
             view_.output = false;
             view_.calibration.spread = 0;
@@ -185,7 +187,6 @@ void Engine::beginCalibration() {
         view_.collecting=false;view_.notice="Connect SteamVR and both controllers before aligning.";return;
     }
     alignment_.reset(now(),&view_.frame->vr);
-    calibrationAccepted_ = false;
     view_.calibrationSamples = 0;
     view_.calibrationDetail = alignment_.feedback();
     view_.notice = "Take your time on each pose. Squeeze either trigger, or click Capture pose, only when ready. No timed positioning and no exact palm twists; your head may be out of view.";
@@ -213,7 +214,7 @@ void Engine::tilt(int direction) {
     // transform. The motor target is never replayed automatically on startup.
     auto invalid=view_.calibration;invalid.valid=false;invalid.spread=0;
     saveCalibration(calibrationFile_,invalid,view_.settings,view_.wristOffsetsReady);
-    view_.calibration=invalid;calibrationAccepted_=false;
+    view_.calibration=invalid;savedAlignment_.invalidate();
     view_.output=false;view_.collecting=false;view_.calibrationDetail.clear();
     view_.bodyCollecting=false;calibrateBody_=false;
     tiltLimiter_.claim(now());tiltTarget_=target;view_.tiltPending=true;
@@ -222,17 +223,15 @@ void Engine::tilt(int direction) {
 void Engine::useSavedCalibration() {
     std::lock_guard l(mutex_);
     if(view_.collecting || view_.bodyCollecting){view_.notice="Finish the current calibration first.";return;}
-    if (!view_.frame || view_.replay || !calibrationAccepted_ || view_.calibration.spread < 0.07 ||
-        view_.calibration.rms >= calibrationMaxRms) {
-        view_.notice = "No previously accepted rigid calibration. Collect a new alignment.";
-        return;
-    }
-    if(!view_.calibration.rawReferenceValid || view_.calibration.rawEpoch!=view_.frame->vr.epoch)
-        if(!bindTrackingReference(view_.calibration,view_.frame->vr)) {
-            view_.notice="SteamVR tracking reference is unavailable; reconnect the headset first.";return;
-        }
-    view_.calibration.valid = true;
-    view_.notice = "Saved alignment confirmed. Space drag now moves all trackers together. Reset OVR offsets before confirming after an app restart.";
+    if(!view_.frame || !view_.running){view_.notice="Start live Kinect tracking before confirming the saved alignment.";return;}
+    if(view_.replay){view_.notice="Saved alignment cannot be confirmed during replay.";return;}
+    if(now()-view_.frame->arrival>.5){view_.notice="Saved alignment is retained. Wait for live camera frames, then confirm again.";return;}
+    if(view_.tiltPending || !tiltLimiter_.ready(now())){view_.notice="Wait for the camera tilt to settle before confirming alignment.";return;}
+    auto confirmed=savedAlignment_.confirm(view_.frame->vr);
+    view_.notice=confirmed.reason;
+    if(!confirmed.valid)return;
+    view_.calibration=confirmed;
+    savedAlignment_.remember(confirmed);
 }
 void Engine::chooseOutput(bool steamVr) {
     std::lock_guard l(mutex_);if(view_.output)return;
@@ -334,7 +333,6 @@ void Engine::captureLoop(std::filesystem::path replay) {
                     view_.calibration.valid = false;
                     view_.output = false;
                     view_.notice = "SteamVR origin changed or restarted; repeat alignment.";
-                    calibrationAccepted_ = false;
                     view_.collecting = false;
                 }
                 lastEpoch = pose.epoch;
@@ -357,13 +355,13 @@ void Engine::captureLoop(std::filesystem::path replay) {
                             calibrationFile_=path;
                             view_.calibration={};
                             // Keep user settings if this sensor has no saved alignment.
-                            calibrationAccepted_=loadCalibration(path,view_.calibration,view_.settings,&view_.wristOffsetsReady);
-                            view_.notice=calibrationAccepted_?"Sensor found. Lock your player and confirm this sensor's saved alignment.":
+                            const bool accepted=loadCalibration(path,view_.calibration,view_.settings,&view_.wristOffsetsReady);
+                            savedAlignment_.remember(view_.calibration,accepted);
+                            view_.notice=savedAlignment_.available()?"Sensor found. Lock your player and confirm this sensor's saved alignment.":
                                 "New Kinect: lock your player, capture proportions, then Align to VR.";
                         }
                         view_.calibration.valid = false;
                         if (captureEpoch > 1) {
-                            calibrationAccepted_ = false;
                             view_.collecting = false;
                         }
                         view_.output = false;
@@ -518,7 +516,6 @@ void Engine::processLoop() {
                     view_.calibration.valid = false;
                     view_.output = false;
                     config.calibration.valid = false;
-                    calibrationAccepted_ = false;
                     view_.collecting = false;
                 }
                 estimator.select(id);
@@ -740,8 +737,9 @@ void Engine::processLoop() {
                 view_.calibrationDetail=alignment_.feedback();
                 if(alignment_.done()) {
                     view_.collecting=false;view_.calibration=alignment_.result();
-                    calibrationAccepted_=view_.calibration.valid;view_.notice=view_.calibration.reason;
+                    view_.notice=view_.calibration.reason;
                     if(view_.calibration.valid) {
+                        savedAlignment_.remember(view_.calibration);
                         view_.calibrationDetail=alignment_.agreement();
                         for(int d=1;d<=2;++d)view_.settings.deviceOffsets[d]=alignment_.offsets()[d];
                         view_.wristOffsetsReady=true;

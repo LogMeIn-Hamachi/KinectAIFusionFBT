@@ -64,7 +64,7 @@ class Engine {
     std::uint64_t recordGeneration_{};
     GuidedAlignment alignment_;
     double bodyCaptureStart_{};
-    bool calibrationAccepted_{};
+    SavedAlignment savedAlignment_;
     bool useGpu_{true};
     TiltLimiter tiltLimiter_;
     std::optional<int> tiltTarget_;

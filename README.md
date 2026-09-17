@@ -101,6 +101,7 @@ If you replace files in the already registered folder, SteamVR loads those files
 
 - **Saved Alignment**: As long as your Kinect has not been moved physically, you do **not** need to re-align every time!
   - Start SteamVR $\to$ Launch `KinectRGBD.exe` $\to$ Click **Start** $\to$ **Lock player** $\to$ **Confirm saved alignment** $\to$ **Start trackers**.
+- **Brief headset removal**: If SteamVR retains the same tracking reference and the camera stays fixed, use **Confirm saved alignment** if confirmation is needed. Temporary unavailability asks you to wake SteamVR and retry. A genuine SteamVR restart or physical tracking-origin change during a running session requires a new alignment.
 - **Playspace Movement**: Moving your playspace with OVR Advanced Settings space drag works automatically—all three trackers stay physically anchored to your real-world body.
 
 ---
