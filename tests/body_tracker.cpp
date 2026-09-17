@@ -1,5 +1,6 @@
 #include "body_tracker.hpp"
 #include "sam3d_geometry.hpp"
+#include "osc_tracking.hpp"
 #include <iostream>
 using namespace kf;
 #include "foot_frames_fixture.hpp"
@@ -17,6 +18,75 @@ PosePrior sample(double time,bool depth=true) {
     p.imageRoot=v[Hip];return p;
 }
 int main(){try {
+    // Smooth constant-speed input through the real body/estimator/output path.
+    // Detect stop-go presentation even when average position accuracy is good.
+    for(double fps:{15.,30.})for(double speed:{.03,.06,.2}) {
+        BodyTracker body;Estimator estimator;estimator.select(7);
+        estimator.settings.contacts=false;estimator.settings.vrConstraints=false;
+        Calibration calibration;calibration.valid=true;VrSample vr;vr.rawTransformValid=true;
+        bindTrackingReference(calibration,vr);
+        OscTracking output;State state;int lastSample=-1;double sum=0,sum2=0,velocitySum=0;int count=0;
+        V3 previous{};
+        for(int tick=0;tick<720;++tick) {
+            double elapsed=tick/120.;int index=int(std::floor(elapsed*fps+1e-8));
+            if(index!=lastSample) {
+                Frame frame;frame.host=100+index/fps;frame.vr=vr;
+                auto pose=sample(frame.host);
+                for(auto& point:pose.points)point.x+=speed*index/fps;
+                pose.imageRoot=pose.points[Hip];
+                Body sdk;sdk.id=7;sdk.player=1;
+                for(int j=0;j<J;++j)sdk.joints[j]={pose.points[j],.9,.02,1};
+                frame.bodies={sdk};
+                auto fitted=body.update(pose,7,frame,calibration,estimator.settings);
+                state=estimator.process(frame,nullptr,calibration,&fitted);lastSample=index;
+            }
+            auto trackers=output.update(state,calibration,vr,100+elapsed+.03);
+            check(trackers[0].valid,"Constant movement lost tracker validity");
+            if(elapsed>3) {
+                double renderedSpeed=(trackers[0].p.x-previous.x)*120;
+                sum+=renderedSpeed;sum2+=renderedSpeed*renderedSpeed;velocitySum+=state.trackers[0].velocity.x;++count;
+            }
+            previous=trackers[0].p;
+        }
+        double mean=sum/count,variation=std::sqrt(std::max(0.,sum2/count-mean*mean))/speed;
+        check(std::abs(velocitySum/count-speed)<speed*.01,"Steady motion velocity was suppressed");
+        check(variation<.02,"Straight motion still pulses between camera samples");
+        std::cout<<"Motion ramp "<<fps<<" Hz / "<<speed<<" m/s: predicted speed "<<velocitySum/count
+            <<", rendered speed variation "<<variation<<"\n";
+    }
+    for(double fps:{15.,30.})for(V3 axis:{V3{1,0,0},V3{0,1,0},V3{0,0,1}}) {
+        BodyTracker body;Estimator estimator;estimator.select(7);
+        estimator.settings.contacts=false;estimator.settings.vrConstraints=false;
+        Calibration calibration;calibration.valid=true;VrSample vr;vr.rawTransformValid=true;
+        bindTrackingReference(calibration,vr);OscTracking output;State state;int lastSample=-1;
+        V3 previous{};double worstVelocityError=0;int measured=0;
+        for(int tick=0;tick<1440;++tick) {
+            double elapsed=tick/120.;int index=int(std::floor(elapsed*fps+1e-8));
+            if(index!=lastSample) {
+                double sampleTime=index/fps,phase=std::fmod(sampleTime,6.);
+                auto pose=sample(100+sampleTime);
+                double distance=.06*(phase<3?phase:6-phase);
+                for(int j:{LAnkle,LHeel,LToe,LSmallToe})pose.points[j]+=V3{0,.2,0}+axis*distance;
+                pose.points[LKnee]+=V3{0,.1,0}+axis*(distance*.5);
+                Frame frame;frame.host=pose.host;frame.vr=vr;
+                Body sdk;sdk.id=7;sdk.player=1;
+                for(int j=0;j<J;++j)sdk.joints[j]={pose.points[j],.9,.02,1};frame.bodies={sdk};
+                auto fitted=body.update(pose,7,frame,calibration,estimator.settings);
+                state=estimator.process(frame,nullptr,calibration,&fitted);lastSample=index;
+            }
+            auto trackers=output.update(state,calibration,vr,100+elapsed+.03);
+            check(trackers[1].valid,"Lifted leg motion lost tracking");
+            double phase=std::fmod(elapsed,6.),sinceTurn=std::fmod(elapsed,3.);
+            if(elapsed>1 && sinceTurn>1.2 && sinceTurn<2.8) {
+                double expected=phase<3?.06:-.06;
+                double speed=dot(trackers[1].p-previous,axis)*120;
+                worstVelocityError=std::max(worstVelocityError,std::abs(speed-expected));++measured;
+            }
+            previous=trackers[1].p;
+        }
+        check(measured>100 && worstVelocityError<.006,"Lifted leg still pulses during straight movement or reversal recovery");
+        std::cout<<"Leg axis "<<axis.x<<','<<axis.y<<','<<axis.z<<" at "<<fps<<" Hz: max steady velocity error "<<worstVelocityError<<" m/s\n";
+    }
     // Verify native MHR foot axes against independently exported neutral mesh
     // landmarks, including Kinect's reflected camera and arbitrary body turns.
     for(bool reflected:{false,true})for(int turn=0;turn<12;++turn) {

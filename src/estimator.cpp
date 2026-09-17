@@ -139,6 +139,7 @@ std::uint32_t Estimator::reconcileIdentity(const Frame &frame, const Calibration
         selected_ = candidate;
         state_.body.id = candidate;
         velocity_ = {}; // Preserve proportions, but never carry occlusion velocity into a new ID.
+        presentationVelocity_={};
         angularVelocity_ = {};
         previousRotation_ = {};
         learnedFilters_={};
@@ -207,6 +208,7 @@ void Estimator::select(std::uint32_t id) {
     state_ = {};
     state_.body.id = id;
     velocity_ = {};
+    presentationVelocity_={};
     angularVelocity_ = {};
     previousRotation_ = {};
     seen_ = {};
@@ -244,6 +246,7 @@ State Estimator::process(const Frame &f, const Keypoints *rgb, const Calibration
     double dt = state_.host > 0 ? std::clamp(f.host - state_.host, 0.001, 0.15) : 1.0 / 30;
     if (state_.host > 0 && f.host <= state_.host)
         return state_;
+    const auto previousLearnedPosition=state_.learnedPosition;
     state_.learnedDirection={};
     state_.learnedPosition={};
     state_.nativeFootDirection={};
@@ -561,6 +564,11 @@ State Estimator::process(const Frame &f, const Keypoints *rgb, const Calibration
     }
     for (int i = 0; i < 3; ++i) {
         auto &t = state_.trackers[i];
+        if(state_.learnedPosition[i]!=previousLearnedPosition[i])presentationVelocity_[i]={};
+        auto motion=presentationVelocity_[i].update(t.p,f.host,t.valid);
+        if(settings.baseline==0 && learned && learned->bodyFitted) {
+            t.velocity=(i>0 && plants_[i-1].planted)?V3{}:motion;
+        }
         if (t.valid && previous.host > 0 && dt > 0.005 && std::isfinite(dot(previousRotation_[i], previousRotation_[i])) && dot(previousRotation_[i], previousRotation_[i]) > 0.5) {
             Q delta = continuous(t.q, previousRotation_[i]) * previousRotation_[i].conjugate();
             V3 axis = {delta.x, delta.y, delta.z};

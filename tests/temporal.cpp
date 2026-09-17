@@ -57,6 +57,17 @@ int main() {
             health.resetSource();health.frame(false,false,false,state);
             check(health.snapshot(6,20).validityLosses[0]==1,"Identity reset counted as a tracker loss");
         }
+        for(double fps:{15.,30.}) {
+            PresentationVelocity motion;double maximum=0;
+            for(int i=0;i<int(fps*4);++i) {
+                auto velocity=motion.update({i%2?.002:-.002,0,0},1+i/fps,true);
+                if(i>fps)maximum=std::max(maximum,norm(velocity));
+            }
+            check(maximum<.004,"Alternating noise was converted into presentation motion");
+            check(norm(motion.update({1,0,0},6,true))==0,"Gap retained old presentation velocity");
+            check(norm(motion.update({1.001,0,0},6.02,false))==0,"Invalid tracker retained velocity");
+            check(norm(motion.update({2,0,0},6.03,true))==0,"Reacquisition carried stale velocity");
+        }
         for(double fps:{15.,30.,45.}) {
             SoleCorrection sole;
             double previous=0,maximumStep=0;

@@ -587,10 +587,33 @@ struct PlantStabilizer {
         return correction;
     }
 };
+// Velocity for presentation only: measure the final corrected tracker path.
+// Preserve coherent slow motion; reject alternating noise without feeding a
+// magnitude deadband back into the next velocity estimate.
+struct PresentationVelocity {
+    V3 previous{},trend{};
+    double activity{},host{};
+    bool initialized{};
+    V3 update(V3 position,double time,bool valid) {
+        if(!valid || !finite(position)){*this={};return {};}
+        const double dt=time-host;
+        if(!initialized || dt<=0 || dt>.15 || norm(position-previous)>.35) {
+            *this={};previous=position;host=time;initialized=true;return {};
+        }
+        const V3 derivative=bounded((position-previous)/dt,4);
+        const double alpha=1-std::exp(-dt/.07);
+        trend=lerp(trend,derivative,alpha);
+        activity+=(norm(derivative)-activity)*alpha;
+        previous=position;host=time;
+        const double coherence=norm(trend)/std::max(activity,1e-9);
+        return trend*std::clamp((coherence-.50)/.35,0.,1.);
+    }
+};
 class Estimator {
     bool smoothSourceChanges_{true};
     State state_;
     std::array<V3, J> velocity_{};
+    std::array<PresentationVelocity,3> presentationVelocity_{};
     std::array<double, J> seen_{};
     std::array<double, bones.size()> lengths_{};
     std::uint32_t selected_{};
