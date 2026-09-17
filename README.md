@@ -53,6 +53,12 @@ By combining the **Fast SAM 3D Body** deep learning foundation model with high-s
 
 ---
 
+## Updating the SteamVR Driver
+
+Close SteamVR completely, extract the new package to its permanent location, and double-click **Update SteamVR Trackers.cmd** in that package. It switches registration from an older Kinect package to the new bundled driver, leaving old files, settings and unrelated drivers untouched. Start SteamVR afterward. Keep the new folder in place.
+
+If you replace files in the already registered folder, SteamVR loads those files on its next start; the updater confirms that the folder is already registered. It does not download releases or copy preferences between packages. A failed registration update attempts to restore the previous Kinect registration.
+
 ## Step-by-Step Calibration Guide
 
 ### Step A: Position Your Kinect

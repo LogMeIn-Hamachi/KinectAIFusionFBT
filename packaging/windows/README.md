@@ -38,3 +38,11 @@ Camera processing stays on your PC. Recording is opt-in using Record locally and
 To move the app: close it, close SteamVR, run **Remove SteamVR Trackers.cmd** in the old folder, move the complete folder, and run **Install SteamVR Trackers.cmd** there. Restart SteamVR. To uninstall, remove the SteamVR registration first, then delete the extracted folder after keeping any recordings/settings you want.
 
 Read **docs/TROUBLESHOOTING.md** for common problems and **THIRD_PARTY_NOTICES.md** for component terms. Converted Meta/DINOv3 models retain their respective agreements; these third-party terms are included in the package.
+
+## Update the SteamVR driver
+
+1. Close SteamVR completely.
+2. Extract the new package to a permanent folder.
+3. Double-click **Update SteamVR Trackers.cmd** in the new folder, then start SteamVR.
+
+This switches SteamVR to the driver bundled in this package, replacing older Kinect registrations without deleting old files or settings. If this folder is already registered, no registration change is needed: SteamVR loads the current files here on startup. The updater does not download updates or transfer preferences. Keep the new folder in place. Failed registration changes attempt to restore the previous Kinect registration.

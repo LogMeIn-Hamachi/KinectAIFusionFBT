@@ -16,17 +16,19 @@ foreach ($runtimePath in $paths.runtime) {
 }
 if (-not $registrar) { throw 'SteamVR registration utility was not found. Start SteamVR once and try again.' }
 if (-not $Remove) {
+    $alreadyHere=$false
     foreach ($registered in $paths.external_drivers) {
-        if ([IO.Path]::GetFullPath($registered).TrimEnd('\','/') -eq $driverPath.TrimEnd('\','/')) { continue }
+        if ([IO.Path]::GetFullPath($registered).TrimEnd('\','/') -eq $driverPath.TrimEnd('\','/')) { $alreadyHere=$true;continue }
         $manifest = Join-Path $registered 'driver.vrdrivermanifest'
         if (Test-Path -LiteralPath $manifest) {
             $driver = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
             if ($driver.name -eq 'kinect_fbt') {
-                throw "Another Kinect tracker folder is registered: $registered. Run Remove SteamVR Trackers.cmd there (or its Install-SteamVR-Trackers.ps1 with -Remove), then install this copy."
+                throw "Another Kinect tracker folder is registered: $registered. Close SteamVR and run Update SteamVR Trackers.cmd in this new package to switch to it."
             }
         }
     }
 }
+if (-not $Remove -and $alreadyHere) { Write-Host 'This driver folder is already installed. Restart SteamVR to load the driver files currently in this folder.';return }
 $action = if ($Remove) { 'removedriver' } else { 'adddriver' }
 & $registrar $action $driverPath
 if ($LASTEXITCODE -ne 0) { throw "SteamVR registration failed ($LASTEXITCODE)." }

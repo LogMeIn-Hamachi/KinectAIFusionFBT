@@ -100,3 +100,9 @@ Validation: Release build and all ten CTest suites pass. The SteamVR output suit
    - `Copy-Item build/Release/KinectRGBD.exe release/dev/KinectRGBD.exe`
    *(Do not wipe or delete the `release/dev/` directory itself, as it houses the models and runtime DLLs).*
 5. Run `python scripts/audit_repository.py` before committing. It must report 0 findings.
+
+## Private development — SteamVR driver updater
+
+`packaging/windows/Update SteamVR Trackers.cmd` launches `Update-SteamVR-Trackers.ps1`. Run it from a complete, permanently located package with SteamVR closed. It identifies older Kinect registrations by manifest name, switches registration using SteamVR's own vrpathreg utility, verifies the result, and attempts rollback on failure. It does not download or overwrite driver binaries, delete old folders/settings, or modify unrelated driver registrations. SteamVR loads the new package's bundled DLL on next start. Same-folder retries are no-ops. The normal installer now treats its already registered folder as success and directs conflicting installations to the updater.
+
+Both runtime assembly and the distribution allowlist include the updater. Run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/driver_update.ps1` for offline fixture tests (new/same folder, first install, duplicates, running-SteamVR refusal, incomplete package, failure rollback, unrelated-driver preservation). These mock registration calls and never alter the real SteamVR installation. No live registration change was performed during implementation.

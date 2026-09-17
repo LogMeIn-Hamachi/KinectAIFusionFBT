@@ -49,7 +49,8 @@ def selection():
         rel = 'docs/licenses/' + name
         files[rel] = SOURCE / rel
     for name in ('README.md', 'START-HERE.html', 'THIRD_PARTY_NOTICES.md',
-                 'Install-SteamVR-Trackers.ps1', 'Install SteamVR Trackers.cmd', 'Remove SteamVR Trackers.cmd'):
+                 'Install-SteamVR-Trackers.ps1', 'Install SteamVR Trackers.cmd', 'Remove SteamVR Trackers.cmd',
+                 'Update-SteamVR-Trackers.ps1', 'Update SteamVR Trackers.cmd'):
         files[name] = TEMPLATES / name
     for name in ('TROUBLESHOOTING.md', 'RELEASE-NOTES.md'):
         files['docs/' + name] = TEMPLATES / name
