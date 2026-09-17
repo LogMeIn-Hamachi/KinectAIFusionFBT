@@ -85,6 +85,7 @@ struct AlignmentCue {
     bool collecting{},waitingForReady{};
     std::string instruction, speech;
 };
+std::string alignmentPoseTitle(int step);
 std::string alignmentPoseInstruction(int step);
 AlignmentCue alignmentCue(int step,double elapsed,bool done=false,bool waiting=false);
 Calibration calibrateKnownOffsets(std::span<const AlignmentObservation> fit,

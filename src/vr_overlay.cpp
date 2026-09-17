@@ -205,22 +205,16 @@ struct VrOverlay::Impl {
                      Gdiplus::RectF(OverlayWidth - 260, 32, 218, 32), &centerFormat, &badgeTextBrush);
 
         // 3. Left Column: Pose Title and Description
-        std::wstring poseTitles[5] = {
-            L"Pose 1: Hands Low (Point Down)",
-            L"Pose 2: Hands Forward (Chest Height)",
-            L"Pose 3: Hands Apart (Diagonal Out)",
-            L"Pose 4: Point Up (Elbows Low)",
-            L"Pose 5: Check Pose (Hands Shoulder-Width)"
-        };
-
         int step = std::clamp(state.step, 0, 4);
+        const auto title=alignmentPoseTitle(step);
+        const std::wstring titleW(title.begin(),title.end());
         if (!state.done) {
-            g.DrawString(poseTitles[step].c_str(), -1, &titleFont, Gdiplus::PointF(40, 88), &whiteBrush);
+            g.DrawString(titleW.c_str(), -1, &titleFont, Gdiplus::PointF(40, 88), &whiteBrush);
             const auto text=alignmentPoseInstruction(step);
             const std::wstring description(text.begin(),text.end());
             g.DrawString(description.c_str(), -1, &descFont, Gdiplus::RectF(40, 130, 560, 100), nullptr, &grayBrush);
 
-            std::wstring tip = L"Relax your elbows. Approximate positions are fine.";
+            std::wstring tip = L"Same grip throughout. Approximate angles and distances are fine.";
             g.DrawString(tip.c_str(), -1, &detailFont, Gdiplus::PointF(40, 245), &mutedBrush);
         } else {
             g.DrawString(L"Alignment Complete!", -1, &titleFont, Gdiplus::PointF(40, 88), &whiteBrush);
@@ -243,7 +237,7 @@ struct VrOverlay::Impl {
 
         // Header for diagram
         Gdiplus::SolidBrush diagHeaderBrush(Gdiplus::Color(255, 130, 155, 175));
-        g.DrawString(L"CONTROLLER ORIENTATION", -1, &diagramFont, Gdiplus::PointF(diagX + 16, diagY + 12), &diagHeaderBrush);
+        g.DrawString(L"POINTING DIRECTION (NOT ARM HEIGHT)", -1, &diagramFont, Gdiplus::PointF(diagX + 16, diagY + 12), &diagHeaderBrush);
 
         // Draw Left & Right controller representations
         float ctrlLeftX = diagX + 75;
@@ -284,7 +278,7 @@ struct VrOverlay::Impl {
         Gdiplus::SolidBrush arrowBrush(Gdiplus::Color(255, 83, 217, 255));
         Gdiplus::SolidBrush arrowTextBrush(Gdiplus::Color(255, 83, 217, 255));
 
-        std::wstring arrowLabels[5] = { L"POINT DOWN", L"POINT FORWARD", L"POINT OUTWARD", L"POINT UP", L"CHECK (SHOULDER-WIDTH)" };
+        std::wstring arrowLabels[5] = { L"TILT DOWN", L"POINT TOWARDS CAMERA", L"FORWARD + OUTWARD", L"TILT UP / ELBOWS LOW", L"FORWARD / ABOVE WAIST" };
         g.DrawString(arrowLabels[step].c_str(), -1, &diagramFont, Gdiplus::RectF(diagX, diagY + 185, diagW, 20), &centerFormat, &arrowTextBrush);
 
         if (step == 0) {
@@ -372,7 +366,7 @@ struct VrOverlay::Impl {
             if (!state.feedback.empty() && state.feedback.find("Could not see") != std::string::npos) {
                 waitSub = L"Wrists were occluded. Adjust your stance and squeeze trigger to retry this pose (earlier poses kept).";
             } else if (step > 0) {
-                waitSub = L"Position controllers as shown above for " + poseTitles[step] + L", then squeeze trigger.";
+                waitSub = L"Position controllers as shown above for " + titleW + L", then squeeze trigger.";
             } else {
                 waitSub = L"Take your time getting into position. Capture will not start until you squeeze a trigger.";
             }

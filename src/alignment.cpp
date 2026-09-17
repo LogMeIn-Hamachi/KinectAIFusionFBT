@@ -169,13 +169,17 @@ void AlignmentSession::writeCsv(std::ostream &out, const Calibration &cal,bool h
         out << '\n';
     }
 }
+std::string alignmentPoseTitle(int step) {
+    constexpr const char* titles[]{"Low Forward / Tilt Down", "Easy Forward Reach", "Open Slightly / Turn Out", "Elbows Low / Tilt Up", "Check / Lower Forward Reach"};
+    return titles[std::clamp(step,0,calibrationPoseCount-1)];
+}
 std::string alignmentPoseInstruction(int step) {
     constexpr const char* poses[]{
-        "Hands just ahead of your waist, shoulder-width apart. Tilt controllers down; keep wrists clear of your body.",
-        "Bend your elbows. Bring hands forward at lower chest height and point controllers towards the camera.",
-        "Open your hands a little wider than your shoulders, still in front of you. Turn controllers diagonally outwards. No wide stretch needed.",
-        "Keep elbows low and hands in front of your lower chest. Tilt controllers upwards. Do not lift your hands above your head.",
-        "Check: bring hands forward, shoulder-width apart, between waist and chest height. Point forwards and keep wrists clear of your body."};
+        "Hands just above waist height, shoulder-width apart, a handspan in front of you. Tilt controllers diagonally down. Keep elbows relaxed.",
+        "Lift hands to lower chest height and reach a little farther forward. Keep elbows bent and hands shoulder-width apart. Point towards the camera.",
+        "Lower hands slightly. Open them just outside shoulder width, still well in front of you. Point diagonally forwards and outwards, not sideways.",
+        "Bring hands back to shoulder width at lower chest height, a handspan forward. Tilt controllers up; keep elbows down and hands below shoulders.",
+        "Check: lower hands to just above your waist and reach a little farther forward than pose 1. Keep shoulder width and point towards the camera."};
     return poses[std::clamp(step,0,calibrationPoseCount-1)];
 }
 AlignmentCue alignmentCue(int step,double elapsed,bool done,bool waiting) {
@@ -287,7 +291,7 @@ void GuidedAlignment::add(const Frame& frame,uint32_t id,const Settings& setting
             if(error<.12){++close;squared+=error*error;}
         }
         if(!close || double(close)/n<calibrationMinInlierFraction || std::sqrt(squared/close)>calibrationMaxRms) {
-            retry(std::string(d==1?"Left":"Right")+" wrist did not agree in the check. Hold hands shoulder-width apart and clear of torso, then squeeze trigger to retry. Earlier poses are kept.");return;
+            retry(std::string(d==1?"Left":"Right")+" wrist did not agree in the check. Hold hands just above waist height, shoulder-width apart and forward, pointing towards the camera. Squeeze trigger to retry. Earlier poses are kept.");return;
         }
     }
     result_=candidate_;done_=true;

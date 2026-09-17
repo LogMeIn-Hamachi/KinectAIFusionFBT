@@ -50,7 +50,7 @@ int main() {
         check(stableFloor.value().valid,"Stable observed floor was not accepted");
         stableFloor.add(2,wrongFloor);
         check(!stableFloor.value().valid,"Sudden floor-height change retained stale floor reference");
-        for(double fps:{15.,30.})for(bool badCheck:{false,true})for(bool useFloor:{false,true}) {
+        for(double angleScale:{.7,1.})for(double fps:{15.,30.})for(bool badCheck:{false,true})for(bool useFloor:{false,true}) {
             VrSample referenceVr;referenceVr.epoch=3;referenceVr.rawTransformValid=true;
             referenceVr.standingToRaw={axisAngle({0,1,0},.4),{1,.2,-2}};
             GuidedAlignment routine;routine.reset(108,&referenceVr);Settings qs;
@@ -62,8 +62,10 @@ int main() {
                 if(stage!=previousStage){entered=f.host;previousStage=stage;}
                 if(cue.waitingForReady && f.host-entered>=10)routine.capturePose(f.host);
                 for(int d=1;d<=2;++d){int j=d==1?LWrist:RWrist;double side=d==1?-1.:1.;
-                    V3 c{side*.3,stage==0||stage==2?.9:stage==4?(d==1?1.2:.9):1.2,stage==2||stage==3?1.8:2.};
-                    Q q=stage==0?axisAngle({1,0,0},-.8):stage==2?axisAngle({0,1,0},side*.8):stage==3?axisAngle({1,0,0},1.1):Q{};
+                    // Compact wrists: all ahead of the torso, elbows bent, below shoulders.
+                    V3 c{side*(stage==2?.32:.25),stage==0||stage==4?1.05:stage==2?1.15:1.25,
+                         stage==0||stage==3?1.8:stage==4?1.65:1.7};
+                    Q q=stage==0?axisAngle({1,0,0},-.8*angleScale):stage==2?axisAngle({0,1,0},side*.8*angleScale):stage==3?axisAngle({1,0,0},1.1*angleScale):Q{};
                     b.joints[j]={c,1,.01,1};f.vr.devices[d]={truth.apply(c)-q.rotate(expected[d]),q,true};
                     if(stage==4 && badCheck && routine.feedback().find("did not agree")==std::string::npos)f.vr.devices[d].p.x+=.15;
                 }
@@ -89,7 +91,7 @@ int main() {
                 for(int tick=0;tick<int(12*fps) && !routine.done();++tick) {
                     Frame f;f.host=105+finished+tick/fps;f.vr=referenceVr;f.vr.host=f.host;Body b;b.id=42;
                     for(int d=1;d<=2;++d) {
-                        V3 c{d==1?-.3:.3,d==1?1.2:.9,2};int j=d==1?LWrist:RWrist;
+                        V3 c{d==1?-.25:.25,1.05,1.65};int j=d==1?LWrist:RWrist;
                         b.joints[j]={c,1,.01,1};f.vr.devices[d]={truth.apply(c)-expected[d],{},true};
                     }
                     f.bodies.push_back(b);routine.add(f,42,qs);
@@ -108,7 +110,9 @@ int main() {
                 if(cue.waitingForReady && f.host-stageStart>=6)routine.capturePose(f.host);
                 for(int d=1;d<=2;++d) {
                     int j=d==1?LWrist:RWrist;double side=d==1?-1.:1.;
-                    V3 c{side*.3,stage==0||stage==2?.9:stage==4?(d==1?1.2:.9):1.2,stage==2||stage==3?1.8:2.};
+                    // Compact wrists: all ahead of the torso, elbows bent, below shoulders.
+                    V3 c{side*(stage==2?.32:.25),stage==0||stage==4?1.05:stage==2?1.15:1.25,
+                         stage==0||stage==3?1.8:stage==4?1.65:1.7};
                     Q q=stage==0?axisAngle({1,0,0},-.8):stage==2?axisAngle({0,1,0},side*.8):stage==3?axisAngle({1,0,0},1.1):Q{};
                     q=q*axisAngle(unit(V3{.3,1,.7}),d*.6);
                     auto noise=V3{std::sin(tick*1.7),std::cos(tick*.8),std::sin(tick*.9)}*.007;
