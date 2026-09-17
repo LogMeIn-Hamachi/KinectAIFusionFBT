@@ -5,11 +5,16 @@
 #include <objidl.h>
 #include <gdiplus.h>
 #include <openvr.h>
+#include <d3d11.h>
+#include <dxgi.h>
+#include <wrl/client.h>
 #include <string>
 #include <vector>
 #include <algorithm>
 #include <cmath>
 
+#pragma comment(lib, "d3d11.lib")
+#pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "gdiplus.lib")
 #pragma comment(lib, "msimg32.lib")
 
@@ -55,6 +60,32 @@ struct VrOverlay::Impl {
     bool visible_{false};
     bool hidePending_{};
     OverlayRefresh refresh_;
+    double nextHealthCheck_{};
+    Microsoft::WRL::ComPtr<ID3D11Device> device_;
+    Microsoft::WRL::ComPtr<ID3D11DeviceContext> context_;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> texture_;
+
+    bool ensureTexture() {
+        if(device_ && FAILED(device_->GetDeviceRemovedReason())) {
+            texture_.Reset();context_.Reset();device_.Reset();
+        }
+        if(texture_)return true;
+        // Use the compositor's adapter, including PCs with an integrated GPU.
+        int adapterIndex=-1;vr::VRSystem()->GetDXGIOutputInfo(&adapterIndex);
+        Microsoft::WRL::ComPtr<IDXGIFactory1> factory;
+        Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+        if(adapterIndex<0 || FAILED(CreateDXGIFactory1(IID_PPV_ARGS(factory.GetAddressOf()))) ||
+           FAILED(factory->EnumAdapters1(UINT(adapterIndex),adapter.GetAddressOf())))return false;
+        if(!device_ && FAILED(D3D11CreateDevice(adapter.Get(),D3D_DRIVER_TYPE_UNKNOWN,nullptr,
+            D3D11_CREATE_DEVICE_BGRA_SUPPORT,nullptr,0,D3D11_SDK_VERSION,
+            device_.GetAddressOf(),nullptr,context_.GetAddressOf())))return false;
+        D3D11_TEXTURE2D_DESC desc{};
+        desc.Width=OverlayWidth;desc.Height=OverlayHeight;desc.MipLevels=1;desc.ArraySize=1;
+        desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;desc.SampleDesc.Count=1;
+        desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+        return SUCCEEDED(device_->CreateTexture2D(&desc,nullptr,texture_.GetAddressOf()));
+    }
+
 
     Impl() {
         Gdiplus::GdiplusStartupInput gdiplusStartupInput;
@@ -81,7 +112,7 @@ struct VrOverlay::Impl {
             char key[128]{};
             vr::VROverlay()->GetOverlayKey(handle_,key,sizeof(key),&status);
             if(status==vr::VROverlayError_None && std::string(key)=="kinect_fbt.calibration_guide")return true;
-            handle_=vr::k_ulOverlayHandleInvalid;visible_=false;
+            handle_=vr::k_ulOverlayHandleInvalid;visible_=false;refresh_.reset();
         }
 
         vr::EVROverlayError err = vr::VROverlay()->FindOverlay("kinect_fbt.calibration_guide", &handle_);
@@ -440,16 +471,33 @@ struct VrOverlay::Impl {
         }
 
         const double now=std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        // Validate without resubmitting an unchanged texture. Drain this
+        // overlay's events so long sessions do not accumulate image/UI events.
+        if(now>=nextHealthCheck_) {
+            nextHealthCheck_=now+1.;
+            if(!ensureOverlay()){refresh_.complete(state,now,false);return;}
+            if(!vr::VROverlay()->IsOverlayVisible(handle_)){visible_=false;refresh_.reset();}
+        }
+        if(handle_!=vr::k_ulOverlayHandleInvalid && vr::VROverlay()) {
+            vr::VREvent_t event{};
+            for(int i=0;i<64 && vr::VROverlay()->PollNextOverlayEvent(handle_,&event,sizeof(event));++i){}
+        }
         if(!refresh_.due(state,now))return;
-        if(!ensureOverlay()){refresh_.complete(state,now,false);return;}
+        if(!ensureOverlay() || !ensureTexture()){refresh_.complete(state,now,false);return;}
         hidePending_=true;
         render(state);
+        context_->UpdateSubresource(texture_.Get(),0,nullptr,pixelBuffer_.data(),OverlayWidth*4,0);
+        context_->Flush();
+        vr::Texture_t image{texture_.Get(),vr::TextureType_DirectX,vr::ColorSpace_Gamma};
         auto* overlay=vr::VROverlay();
-        bool success=overlay && overlay->SetOverlayRaw(handle_,pixelBuffer_.data(),OverlayWidth,OverlayHeight,4)==vr::VROverlayError_None;
-        if(success)success=overlay->ShowOverlay(handle_)==vr::VROverlayError_None;
+        bool success=overlay && overlay->SetOverlayTexture(handle_,&image)==vr::VROverlayError_None;
+        // Repeated ShowOverlay calls are unnecessary for an already visible card.
+        if(success && !visible_) {
+            success=overlay->ShowOverlay(handle_)==vr::VROverlayError_None;
+            if(success)visible_=true;
+        }
         refresh_.complete(state,now,success);
-        visible_=success;
-        // Keep the handle for hide/cancel; ensureOverlay revalidates it on retry.
+        // A failed update leaves the last visible texture in place until retry.
 
     }
 };

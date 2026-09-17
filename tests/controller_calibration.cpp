@@ -176,7 +176,8 @@ int main() {
             OverlayRefresh refresh;OverlayState state;state.active=true;state.isRetry=true;
             check(refresh.due(state,100),"First overlay frame suppressed");
             refresh.complete(state,100,true);
-            check(!refresh.due(state,100.5) && refresh.due(state,101.01),"Unchanged overlay did not periodically recover");
+            check(!refresh.due(state,100.5) && !refresh.due(state,101.01),"Unchanged overlay repeatedly reloaded its image");
+            refresh.reset();
             for(int attempt=0;attempt<20;++attempt) {
                 double t=102+attempt;
                 check(refresh.due(state,t),"Failed identical overlay state suppressed retry");
@@ -186,6 +187,24 @@ int main() {
             refresh.complete(state,123,true);state.agreement="new result";
             check(refresh.due(state,123.11),"Overlay completion text change suppressed");
             refresh.reset();check(refresh.due(state,123.12),"Hidden overlay did not reset presentation");
+            state.step=4;state.waitingForReady=true;state.collecting=false;
+            refresh.complete(state,124,true);
+            check(!refresh.due(state,130),"Idle final pose reuploaded unchanged image");
+            for(int attempt=0;attempt<20;++attempt) {
+                double t=131+attempt*4.;
+                state.waitingForReady=false;state.collecting=true;state.leftSamples=state.rightSamples=12;
+                check(refresh.due(state,t),"Stage five capture was not displayed after retry");
+                refresh.complete(state,t,false);
+                check(refresh.due(state,t+.26),"Stage five failed texture update froze presentation");
+                refresh.complete(state,t+.26,true);
+                state.waitingForReady=true;state.collecting=false;state.isRetry=true;
+                state.leftSamples=state.rightSamples=0;
+                check(refresh.due(state,t+1),"Stage five retry card was suppressed");
+                refresh.complete(state,t+1,true);
+            }
+            state.done=true;state.success=true;state.isRetry=false;
+            check(refresh.due(state,220),"Stage five completion card was suppressed");
+
         }
         auto oneAxis=samples(2);check(!calibrateControllers(oneAxis,fitted).valid,"Reject single-axis orientation degeneracy");
         auto missing=input;std::erase_if(missing,[](auto &s){return s.device==2;});

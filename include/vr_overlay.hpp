@@ -32,17 +32,17 @@ struct OverlayState {
 };
 
 // Commit only successfully displayed states. Retry failed uploads even when the
-// calibration state is unchanged; periodically refresh after runtime disruption.
+// calibration state is unchanged. Runtime recovery explicitly invalidates it.
 class OverlayRefresh {
     std::optional<OverlayState> displayed_;
-    double nextAttempt_{}, lastSuccess_{};
+    double nextAttempt_{};
 public:
     bool due(const OverlayState& state,double now) const {
-        return now>=nextAttempt_ && (!displayed_ || *displayed_!=state || now-lastSuccess_>=1.);
+        return now>=nextAttempt_ && (!displayed_ || *displayed_!=state);
     }
     void complete(const OverlayState& state,double now,bool success) {
         nextAttempt_=now+(success?.1:.25);
-        if(success){displayed_=state;lastSuccess_=now;}
+        if(success)displayed_=state;
         else displayed_.reset();
     }
     void reset(){*this={};}

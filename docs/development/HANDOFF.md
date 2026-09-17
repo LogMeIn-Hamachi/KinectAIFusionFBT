@@ -133,3 +133,12 @@ Readiness now tracks release/press separately for each controller. One held trig
 Overlay updates/hide are serialized. Presentation state is committed only after both upload and show succeed, with 250 ms failure retries, a one-second periodic refresh and at most 10 changed-card uploads per second. Existing handles are validated against the overlay key before reuse. Render buffers are cleared, long retry reasons have more room, cancellation cannot show completion merely because old wrist offsets exist, and completion text no longer claims to automatically resume output. The shared offline presentation policy is tested for repeated identical-state failures and recovery. These fix concrete failure paths; the user's exact headset freeze has not been reproduced live.
 
 Validation: Release build and all ten offline CTest suites. No camera recording or live tracker output was enabled. Deploy both binaries into release/dev without removing existing runtime files or user settings.
+
+
+## Private development — 2026-09-17: replace raw overlay image reloads
+
+Follow-up live report: slow headset-card flicker and a visually frozen fifth pose, while the desktop continued working and the overlay disappeared when alignment succeeded. This isolates the reported freeze to presentation rather than a stopped calibration routine. The previous periodic SetOverlayRaw resubmission was not an adequate fix.
+
+The headset card now uses one reusable D3D11 BGRA texture on SteamVR's DXGI adapter, updated with UpdateSubresource and submitted through SetOverlayTexture. SetOverlayRaw (the asynchronous image-loading path) is no longer used. ShowOverlay is called only when showing/recovering the card, not for every update. Unchanged cards are not uploaded periodically; a separate health check validates the handle/visibility, and overlay events are drained with a bounded poll. Failed submissions retry with the existing backoff. Device removal recreates GPU resources. This only changes overlay presentation, not calibration poses, acceptance or tracking.
+
+Offline presentation tests cover unchanged final-pose cards, twenty capture/retry cycles including upload failures, and transition to successful completion. Release build and all ten CTest suites must pass before deployment. These tests cannot establish headset flicker elimination; a user headset check is still needed. No camera data was recorded or VR tracker output enabled during development.
