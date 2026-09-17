@@ -22,6 +22,36 @@ All ten local CTest suites passed. Synthetic tests cover OVR translation/rotatio
 
 Single-camera side views, lying on furniture and limb occlusions remain difficult. Prior user feedback improved after removing aggressive VR anchoring and using user-paced calibration. Do not resurrect those approaches just because historical notes or older scripts mention them.
 
+## Complete Chronological Changelog of Improvements (Preview 23 to v1.0.1)
+
+1. **Adaptive GPU Cadence & Zero-VRChat Lag (`ca27b01`, `4d1041d`, `e69b745`)**:
+   - Added multi-tier neural cadence control (`Auto`, `30 Hz full`, `20 Hz balanced`, `15 Hz low GPU`) in `src/engine.cpp` and `src/body_tracker.cpp`.
+   - Allows throttling neural network compute during heavy VRChat GPU loads while preserving 30 FPS metric depth re-registration and foot surface locking.
+   - Assigned dedicated high-priority CUDA compute streams (`c10::cuda::getStreamFromPool(true)`) to both TensorRT and LibTorch to avoid DirectX render preemption.
+2. **Torch Decoder Tensor Contiguity (`0f0afbb`)**:
+   - Added `.contiguous()` before raw pointer `std::memcpy` extraction in `src/sam3d_torch_decoder.cpp`, preventing corrupted joint output from strided tensor slices.
+3. **Camera Exposure Automation (`2761248`)**:
+   - Removed legacy manual "prioritize 30 fps" checkbox that caused underexposure; camera exposure is automatic by default across both Kinect v1 and v2.
+4. **In-Headset SteamVR Visual Calibration Overlay (`4815046`, `a9b549a`, `ba2d7dd`)**:
+   - Built an in-headset OpenVR dashboard/world overlay (`src/vr_overlay.cpp`, `include/vr_overlay.hpp`).
+   - Renders live 3D visual guide poses, countdowns, wrist tracking progress (`X/12`), and dedicated retry screens with guidance so the user never needs to remove their headset.
+   - Relaxed Pose 5 ergonomics to shoulder-width forward reach clear of the torso.
+   - Forwarded learned wrist prior to holdout validation to eliminate false calibration failures.
+5. **SteamVR Driver Monotonic Smoothing (`6e97083`)**:
+   - Eliminated the "move > jump > freeze > jump" rubber-banding and stage-jumping artifacts.
+   - Set compositor velocity to zero (`p.vecVelocity = {0,0,0}` and `p.vecAngularVelocity = {0,0,0}`) to stop SteamVR's compositor from extrapolating tracker poses ahead in time between frames.
+   - Implemented an adaptive 1-Euro monotonic low-pass filter for position ($f_c = 6.0\text{ Hz}$ to $28.0\text{ Hz}$) with sub-12 ms latency and zero overshoot.
+6. **Hotfix: Restored Tracker Rotation (`3e31704`)**:
+   - Fixed an inverted argument order in `targetRot = kf::continuous(targetRot, currentRot_)` in `src/steamvr_driver.cpp` that had previously overwritten target rotation with current rotation every frame, restoring full 360° rotation for feet and body turns.
+   - Added 1-Euro adaptive rotation filter ($f_c = 8.0\text{ Hz}$ to $32.0\text{ Hz}$).
+   - Added automated rotation convergence unit test in `tests/steamvr_output.cpp`.
+7. **Hardware Requirements & Troubleshooting Guidance (`e28ed87`)**:
+   - Documented NVIDIA GeForce RTX 4000 / 5000 series requirement due to native hardware FP8 Tensor Cores in `sam3d-optimized`.
+   - Documented Windows 11 Kinect v2 microphone array audio enhancement reboot loop fix.
+8. **Public Release & Standalone Packaging (`0678611`, `3e31704`, Releases v1.0.0 & v1.0.1)**:
+   - Established public GitHub repository: `https://github.com/LogMeIn-Hamachi/KinectAIFusionFBT`.
+   - Published standalone release packages with 3-part split archives and drop-in `AppUpdate.zip`.
+
 ## Hardware Support
 - **GPU**: NVIDIA GeForce RTX 4000 (Ada Lovelace) or RTX 5000 (Blackwell) series required for native hardware FP8 Tensor Cores in `sam3d-optimized`. Tested device: RTX 5070 Ti on Windows 11. Older RTX 20/30 series GPUs lack hardware FP8 instructions and fail TensorRT compilation for FP8 graphs.
 - **Sensors**: Kinect for Xbox 360 (v1) with SDK 1.8; Kinect for Xbox One (v2) with SDK 2.0. For Kinect v2 on Windows 11, audio enhancements on the microphone array must be disabled in Sound properties to prevent continuous hardware reboot loops.
