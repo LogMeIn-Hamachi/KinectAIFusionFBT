@@ -1,5 +1,6 @@
 #include "steamvr_bridge.hpp"
 #include "alignment.hpp"
+#include "tracker_smoothing.hpp"
 #include <openvr_driver.h>
 #include <iostream>
 using namespace kf;
@@ -10,6 +11,19 @@ int main(){try {
     VrSample vr;vr.rawTransformValid=true;vr.standingToRaw={axisAngle({0,1,0},-.7),{.4,.1,.8}};
     check(bindTrackingReference(cal,vr),"Live calibration reference could not be captured");
     auto p=trackerPacket(s,cal,vr,10.02,true);check(validPacket(p,10.02),"Valid SteamVR packet rejected");
+    {
+        auto status=bridgeTrackingStatus(p,0,10.02);
+        check(status.connected && status.valid,"Live tracker is not valid/connected");
+        auto missing=p;missing.poses[0].valid=0;
+        status=bridgeTrackingStatus(missing,0,10.02);
+        check(status.connected && !status.valid,"Missing pose hot-unplugged a live device");
+        missing=p;missing.published=10.25;
+        status=bridgeTrackingStatus(missing,0,10.25);
+        check(status.connected && !status.valid,"Expired observation stayed valid or disconnected device");
+        check(!bridgeTrackingStatus(missing,0,10.6).connected,"Dead writer remained connected");
+        missing.enabled=0;
+        check(!bridgeTrackingStatus(missing,0,10.25).connected,"Stopped output remained connected");
+    }
     auto expected=vr.standingToRaw.apply(cal.transform.apply(t.p+t.velocity*.02));
     auto& v=p.poses[0];check(norm(V3{v.position[0],v.position[1],v.position[2]}-expected)<1e-9,"Standing/raw conversion or reflection incorrect");
     Q q{v.rotation[0],v.rotation[1],v.rotation[2],v.rotation[3]};
@@ -84,24 +98,43 @@ int main(){try {
         check(waiting.instruction.find("Palms")==std::string::npos,"Complicated palm pose instruction retained");
     }
     check(!alignmentCue(4,8,true).collecting,"Calibration collects after completion");
-    {
-        Q currentRot{1, 0, 0, 0};
-        Q targetRot = axisAngle({0, 1, 0}, 1.5707963);
-        check(angleBetween(currentRot, targetRot) > 1.5, "Rotation distance setup invalid");
-        double dt = 1.0 / 90.0;
-        double currentAngSpeed = 0.0;
-        for (int frame = 0; frame < 10; ++frame) {
-            targetRot = continuous(targetRot, currentRot);
-            double angDist = angleBetween(currentRot, targetRot);
-            double rawAngSpeed = angDist / dt;
-            double angSpeedAlpha = 1.0 - std::exp(-dt / 0.030);
-            currentAngSpeed += (rawAngSpeed - currentAngSpeed) * angSpeedAlpha;
-            double fcRot = std::clamp(8.0 + 4.0 * currentAngSpeed, 8.0, 32.0);
-            double tauRot = 1.0 / (2.0 * pi * fcRot);
-            double alphaRot = 1.0 - std::exp(-dt / tauRot);
-            currentRot = normalized(blend(currentRot, targetRot, alphaRot));
+    for(double renderHz:{90.,120.,144.}) {
+        TrackerSmoothing filter;
+        filter.update({},Q{},1,1);
+        auto target=axisAngle({0,1,0},pi/2);
+        double previousDistance=.2,previousAngle=pi/2;
+        for(int i=1;i<=int(renderHz*.2);++i) {
+            double time=1+i/renderHz;
+            filter.update({.2,0,0},i%2?target:-target,1+1./30,time);
+            double distance=norm(filter.position()-V3{.2,0,0});
+            double angle=angleBetween(filter.rotation(),target);
+            check(distance<=previousDistance+1e-9 && filter.position().x<=.2,"Driver position overshot or oscillated");
+            check(angle<=previousAngle+1e-9,"Driver rotation reversed or lost quaternion continuity");
+            previousDistance=distance;previousAngle=angle;
         }
-        check(angleBetween(currentRot, targetRot) < 0.05, "Driver rotation filter froze or failed to converge");
+        check(previousDistance<.001 && previousAngle<.01,"Actual driver filter failed to converge");
+        filter.update({2,0,0},Q{},2,2);
+        check(norm(filter.position()-V3{2,0,0})<1e-9,"Driver retained stale history after gap/teleport");
+        filter.reset();
+        filter.update({.1,0,0},target,3,3);
+        check(norm(filter.position()-V3{.1,0,0})<1e-9 && angleBetween(filter.rotation(),target)<1e-6,"Tracker reacquisition retained old smoothing");
+    }
+    // The same 30 Hz observations must produce the same measured motion at
+    // different compositor rates. Repeated packets must not remeasure error.
+    for(double renderHz:{90.,120.,144.}) {
+        TrackerSmoothing filter;double maximumLag=0;
+        for(int i=0;i<=int(renderHz*3);++i) {
+            double elapsed=i/renderHz;
+            int sample=int(std::floor(elapsed*30+1e-8));double observed=1+sample/30.;
+            V3 target{sample/30.*.2,0,0};
+            filter.update(target,axisAngle({0,1,0},sample/30.*.4),observed,1+elapsed);
+            if(elapsed>1)maximumLag=std::max(maximumLag,target.x-filter.position().x);
+        }
+        check(std::abs(filter.speed()-.2)<.001,"Driver adaptive speed depends on compositor rate/filter error");
+        check(maximumLag<.015,"Corrected driver added excessive movement lag");
+        // Stop at the last point: fresh identical samples must remove velocity.
+        for(int i=1;i<=30;++i)filter.update({.6,0,0},axisAngle({0,1,0},1.2),4+i/30.,4+i/30.);
+        check(filter.speed()<1e-6,"Stationary target retained adaptive speed");
     }
     HMODULE dll=LoadLibraryW(L"driver_kinect_fbt.dll");check(dll!=nullptr,"SteamVR driver DLL cannot load");
     using Factory=void*(*)(const char*,int*);auto factory=reinterpret_cast<Factory>(GetProcAddress(dll,"HmdDriverFactory"));

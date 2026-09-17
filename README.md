@@ -15,11 +15,11 @@ By combining the **Fast SAM 3D Body** deep learning foundation model with high-s
 
 ## Highlights & Features
 
-- **Silky-Smooth 90 Hz / 120 Hz / 144 Hz Tracking**: Custom 1-Euro adaptive monotonic filtering in the SteamVR driver eliminates rubber-banding, mass inertia, and stage-jumping artifacts. Feet and waist stay rock-solid when still, and follow rapid motion with sub-12 ms latency.
+- **Adaptive SteamVR Smoothing**: Position and rotation filtering runs with SteamVR updates and adjusts to observed movement. It approaches a fixed target without overshoot; live latency and tracking quality depend on camera rate, visibility and PC load.
 - **In-Headset SteamVR 3D Calibration Overlay**: A real-time visual guide renders directly in your headset during calibration. Clear 3D controller poses, live countdowns, wrist tracking progress counters (`X/12`), and dedicated retry screens guide you through setup without having to take off your headset.
 - **Fast SAM 3D Body Deep Learning**: Selective FP8 TensorRT backbone and native LibTorch C++ GPU decoder reconstruct full anatomical 3D joints from raw camera video in real time.
-- **High-Priority GPU Stream (Zero VRChat Lag)**: AI inference runs on a dedicated high-priority CUDA compute stream, preventing heavy VRChat worlds or GPU-intensive games from causing tracking stutter.
-- **Adaptive GPU Cadence**: Automatically throttles neural compute during peak GPU loads (Auto / 30 Hz / 20 Hz / 15 Hz) while continuing to extrapolate joint velocity and re-register metric depth at full 30 FPS.
+- **High-Priority GPU Stream**: AI inference uses a dedicated high-priority CUDA stream. It still shares the GPU with VRChat.
+- **Adaptive Neural Cadence**: Auto / 30 Hz / 20 Hz / 15 Hz controls the rate of new AI estimates. Depth and foot contacts are processed on every delivered camera frame, including frames that reuse a recent AI estimate.
 - **Full Metric Depth & Ground-Plane Locking**: Automatically detects room floor tilt and locks soles to the floor to prevent floating or floor clipping.
 - **Playspace Move & Space Drag Support**: Seamlessly moves with OVR Advanced Settings playspace drag and rotation without losing calibration.
 - **Saved Alignment Memory**: Calibrate once and click **Confirm saved alignment** in future sessions to jump straight in.
@@ -103,10 +103,12 @@ By combining the **Fast SAM 3D Body** deep learning foundation model with high-s
 
 In the **Advanced** tab of `KinectRGBD.exe`:
 - **Tracking Cadence**:
-  - `Auto (GPU adaptive)` *(Default)*: Automatically throttles AI frame rate (30 Hz $\to$ 20 Hz $\to$ 15 Hz) during extreme GPU contention while maintaining smooth 30 FPS depth tracking.
-  - `30 Hz (Full AI)`: Runs full neural estimation on every single frame.
-  - `20 Hz (Balanced)`: Saves 33% GPU compute time while remaining fluid.
-  - `15 Hz (Low GPU)`: Saves 50% GPU compute time for demanding VR titles.
+  - `Auto (GPU adaptive)` *(Default)*: Starts at up to 30 Hz, reduces the rate after sustained processing delays, and steps back up when the load recovers. It uses processing time and queued-frame delay, not a GPU usage percentage.
+  - `30 Hz (Full AI)`: Up to 30 new AI estimates per second.
+  - `20 Hz (Balanced)`: Up to 20 new estimates per second, reducing neural work.
+  - `15 Hz (Low GPU)`: Up to 15 new estimates per second for demanding VR titles.
+  - The displayed actual Hz counts completed AI estimates. All modes are limited by camera delivery and available processing time. A camera delivering 15 fps cannot produce 30 new image estimates per second; selecting 15 Hz does not halve that camera rate again.
+  - If tracking seems to drop in and out, click **Diagnostics** after reproducing it. The report separates deliberate AI-result reuse from missing estimates, source switches and tracker validity losses. A temporarily untracked foot stays connected to SteamVR but has an invalid pose until it is observed again.
 - **Model Selection**: Switch between **SAM optimized** (fastest, FP8 + TF32) and **SAM original**.
 - **OSC Output**: Optional standalone VRChat OSC output on `localhost:9000` (alternative to native SteamVR drivers).
 

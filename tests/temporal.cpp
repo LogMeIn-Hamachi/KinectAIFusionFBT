@@ -1,9 +1,62 @@
 #include "core.hpp"
+#include "neural_cadence.hpp"
+#include "tracking_health.hpp"
 #include <iostream>
 using namespace kf;
 static void check(bool ok,const char *message) {if(!ok)throw std::runtime_error(message);}
 int main() {
     try {
+        // Cadence is a wall-time ceiling, including slow cameras and jitter.
+        for(double cameraHz:{15.,20.,30.})for(int choice:{1,2,3}) {
+            NeuralCadence cadence;int runs=0;
+            double desired=choice==1?30:choice==2?20:15;
+            for(int i=0;i<int(cameraHz*12);++i) {
+                double t=1+i/cameraHz+(i%2?.0002:0);
+                if(cadence.due(t,choice))++runs;
+            }
+            check(std::abs(runs-12*std::min(desired,cameraHz))<=1,"Cadence divided slow camera frames or drifted");
+        }
+        {
+            NeuralCadence cadence;double t=1;
+            auto run=[&](double seconds,double cost,double queue=0.) {
+                for(int i=0;i<int(seconds*30);++i,t+=1./30)
+                    if(cadence.due(t,0))cadence.observe(t,cost,queue);
+            };
+            // Ignore startup compilation; normal 29ms worker fits the budget.
+            run(2./30,500);run(4,29);
+            check(cadence.hz()==30,"Startup or healthy inference selected a low rate");
+            run(5,58);check(cadence.hz()==15,"Sustained overload did not throttle");
+            run(5,38);check(cadence.hz()==20,"Auto stayed stuck at 15 under moderate load");
+            run(5,27);check(cadence.hz()==30,"Auto failed to recover to full rate");
+            run(1./30,45);run(3,27);check(cadence.hz()==30,"One transient lowered the rate");
+            run(4,27,24);check(cadence.hz()==20,"Real queue backlog did not reduce cadence");
+            run(5,27);check(cadence.hz()==30,"Queue recovery left Auto throttled");
+            for(int i=0;i<300;++i,t+=1./30)cadence.due(t,0);
+            check(cadence.hz()==30,"Frames without new inference changed Auto");
+            check(cadence.due(t+2,3),"Long stall did not allow immediate inference");
+            check(!cadence.due(t+2.01,3),"Stall caused catch-up inference burst");
+            check(cadence.due(t+2.02,1),"Mode change did not reset deadline");
+            check(cadence.due(t+2.021,3,true),"Replay incorrectly skipped inference");
+            check(cadence.due(1,3),"Clock reset retained a future deadline");
+        }
+        {
+            TrackingHealth health;State state;
+            for(int i=0;i<61;++i) {health.inferred(1+i/30.);health.snapshot(1+i/30.,20);}
+            check(std::abs(health.snapshot(3,20).neuralHz-30)<.01,"Actual neural rate incorrect");
+            auto stalled=health.snapshot(3,20);stalled.age(6);
+            check(stalled.neuralHz==0 && stalled.neuralAgeMs==3000,"Stalled camera GUI retained fresh neural stats");
+            check(health.snapshot(6,20).neuralHz==0,"Stopped inference still displayed a live rate");
+            state.trackers[0].valid=true;state.learnedPosition[0]=true;
+            health.frame(false,false,false,state);
+            health.frame(true,false,false,state);
+            state.learnedPosition[0]=false;health.frame(false,false,true,state);
+            state.trackers[0].valid=false;health.frame(false,true,true,state);
+            auto stats=health.snapshot(6,20);
+            check(stats.reusedFrames==1 && stats.inferenceErrors==1 && stats.missingPriorFrames==2,"Health event counts incorrect");
+            check(stats.sourceChanges[0]==1 && stats.validityLosses[0]==1,"Reuse confused with tracking loss");
+            health.resetSource();health.frame(false,false,false,state);
+            check(health.snapshot(6,20).validityLosses[0]==1,"Identity reset counted as a tracker loss");
+        }
         for(double fps:{15.,30.,45.}) {
             SoleCorrection sole;
             double previous=0,maximumStep=0;

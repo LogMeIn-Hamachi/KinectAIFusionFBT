@@ -4,6 +4,7 @@
 #include "body_tracker.hpp"
 #include "steamvr_bridge.hpp"
 #include "vr_overlay.hpp"
+#include "neural_cadence.hpp"
 #include <timeapi.h>
 #include <iomanip>
 #include <sstream>
@@ -32,6 +33,7 @@ Engine::~Engine() {
 View Engine::view() const {
     std::lock_guard l(mutex_);
     auto copy = view_;
+    copy.health.age(now());
     copy.tiltWait=std::max(0.,tiltLimiter_.nextAllowed-now());
     if(copy.collecting) {
         auto cue=alignment_.cue(now());
@@ -54,7 +56,7 @@ View Engine::view() const {
         double elapsed=now()-bodyCaptureStart_;
         copy.bodySecondsRemaining=std::max(0.,(elapsed<0?0:4)-elapsed);
         copy.bodySpeech=elapsed<0?"Stand naturally with your feet apart and arms relaxed. Capture begins in eight seconds.":"Hold still. Capturing proportions for four seconds.";
-        copy.bodyPrompt=(elapsed<0?"Get into position: ":"Hold still — capturing: ")+std::to_string(int(std::ceil(copy.bodySecondsRemaining)))+" seconds";
+        copy.bodyPrompt=(elapsed<0?"Get into position: ":"Hold still â€” capturing: ")+std::to_string(int(std::ceil(copy.bodySecondsRemaining)))+" seconds";
     }
     if(copy.running && !copy.replay && copy.state.host>0) {
         auto delivered=deliveryState(copy.state,now());
@@ -80,6 +82,7 @@ void Engine::start(const std::filesystem::path &replay) {
         view_.output = false;
         view_.frames = view_.sent = view_.dropped = 0;
         view_.state = {};
+        view_.health={};view_.outputValidityLosses={};view_.inferenceMs=0;
         view_.samOverlay.reset();view_.poseSource.clear();view_.modelHash.clear();
         view_.frame.reset();
         view_.exposureStatus.clear();
@@ -478,15 +481,16 @@ void Engine::processLoop() {
         double lastInferenceHost = 0;
         double prevInferenceHost = 0;
         double prevNlfInferenceHost = 0;
-        uint64_t inferenceFrameCount = 0;
-        int autoThrottleRemaining = 0;
-        int autoThrottleLevel = 0;
+        NeuralCadence cadenceControl;
+        TrackingHealth health;
         double lastMeasuredInferenceMs = 0;
         while (run_) {
             auto next = measurements_.pop(!view().replay);
             if (!next)
                 continue;
+            const double workStart=now();
             auto frame = *next;
+            const double queueWaitMs=std::max(0.,(workStart-frame->arrival)*1000-frame->captureMs);
             indexRegistration(*frame);
             if(frame->sensorVersion==2)frame->colorProjection=std::make_shared<ColorProjection>(fitColorProjection(*frame));
             auto config = view();
@@ -522,6 +526,7 @@ void Engine::processLoop() {
                 lastDepth = ~0u;
                 lastEpoch = frame->epoch;
                 lastCrop.reset();
+                cadenceControl.reset();health.resetSource();
                 lastSamPrediction.reset();
                 prevSamPrediction.reset();
                 lastNlfPrediction.reset();
@@ -539,6 +544,7 @@ void Engine::processLoop() {
                 continuity.reset();
                 collectingBody=false;{std::lock_guard l(mutex_);view_.bodyCollecting=false;}
                 lastCrop.reset();
+                cadenceControl.reset();health.resetSource();
                 lastSamPrediction.reset();
                 prevSamPrediction.reset();
                 lastNlfPrediction.reset();
@@ -560,6 +566,7 @@ void Engine::processLoop() {
                     collectingBody=false;calibrateBody_=false;
                     {std::lock_guard l(mutex_);view_.bodyCollecting=false;}
                     lastCrop.reset();
+                    cadenceControl.reset();health.resetSource();
                     lastSamPrediction.reset();
                     prevSamPrediction.reset();
                     lastNlfPrediction.reset();
@@ -585,41 +592,9 @@ void Engine::processLoop() {
             std::optional<PosePrior> learned;
             std::optional<Keypoints> samOverlay;
             double begin = now(), inferenceMs = 0;
-            ++inferenceFrameCount;
-            int cadence = config.cadenceChoice; // 0 Auto, 1 Full (30Hz), 2 Balanced (20Hz), 3 Low GPU (15Hz)
-            bool shouldInfer = true;
-            if (config.replay) {
-                shouldInfer = true;
-            } else if (cadence == 1) {
-                shouldInfer = true;
-            } else if (cadence == 2) {
-                shouldInfer = (inferenceFrameCount % 3 != 0); // 20 Hz (2 of 3)
-            } else if (cadence == 3) {
-                shouldInfer = (inferenceFrameCount % 2 != 0); // 15 Hz (1 of 2)
-            } else {
-                // Auto: graduated throttling based on GPU contention.
-                // 30 Hz frame budget is 33.3ms. SAM on RTX 5070 Ti takes ~22-26ms.
-                // Level 2 (15 Hz): severe contention (inference > 32ms or queue > 20ms)
-                // Level 1 (20 Hz): moderate contention (inference > 28.5ms or queue > 14ms)
-                if (lastMeasuredInferenceMs > 32.0 || config.queueMs > 20.0) {
-                    autoThrottleLevel = 2; // 15 Hz
-                    autoThrottleRemaining = 30;
-                } else if (lastMeasuredInferenceMs > 28.5 || config.queueMs > 14.0) {
-                    if (autoThrottleLevel < 1) autoThrottleLevel = 1; // 20 Hz
-                    autoThrottleRemaining = 30;
-                }
-                if (autoThrottleRemaining > 0) {
-                    --autoThrottleRemaining;
-                    if (autoThrottleLevel == 2) {
-                        shouldInfer = (inferenceFrameCount % 2 != 0); // 15 Hz
-                    } else {
-                        shouldInfer = (inferenceFrameCount % 3 != 0); // 20 Hz
-                    }
-                } else {
-                    autoThrottleLevel = 0;
-                    shouldInfer = true; // 30 Hz full
-                }
-            }
+            const int cadence=config.cadenceChoice;
+            const bool shouldInfer=cadenceControl.due(frame->host,cadence,config.replay);
+            bool inferred=false,reused=false,inferenceFailed=false;
             if ((model.ready() || sam.ready() || nlf.ready()) && id && config.settings.inference && config.settings.baseline == 0 &&
                 lastCrop && frame->host - cropTime < 0.12) {
                 try {
@@ -634,14 +609,15 @@ void Engine::processLoop() {
                                 lastNlfPrediction = nlf.infer(*frame, *lastCrop, camera);
                                 lastInferenceHost = frame->host;
                                 inferenceMs = (now() - begin) * 1000;
-                                lastMeasuredInferenceMs = inferenceMs;
+                                lastMeasuredInferenceMs = inferenceMs;inferred=true;
                             }
                             if (lastNlfPrediction) {
+                                reused=!inferred;
                                 auto pred = *lastNlfPrediction;
                                 pred.host = frame->host;
                                 double dtInfer = lastInferenceHost - prevNlfInferenceHost;
                                 double dtSkip = frame->host - lastInferenceHost;
-                                if (!shouldInfer && prevNlfPrediction && dtInfer > 0.015 && dtInfer < 0.15 && dtSkip > 0 && dtSkip < 0.12) {
+                                if (!inferred && prevNlfPrediction && dtInfer > 0.015 && dtInfer < 0.15 && dtSkip > 0 && dtSkip < 0.12) {
                                     double ratio = std::clamp(dtSkip / dtInfer, 0.0, 1.0);
                                     for (size_t i = 0; i < pred.landmarks.size(); ++i) {
                                         V2 imgVel = {lastNlfPrediction->landmarks[i].uv.x - prevNlfPrediction->landmarks[i].uv.x,
@@ -667,14 +643,15 @@ void Engine::processLoop() {
                                 lastSamPrediction = sam.infer(*frame, crop, camera);
                                 lastInferenceHost = frame->host;
                                 inferenceMs = (now() - begin) * 1000;
-                                lastMeasuredInferenceMs = inferenceMs;
+                                lastMeasuredInferenceMs = inferenceMs;inferred=true;
                             }
                             if (lastSamPrediction) {
+                                reused=!inferred;
                                 auto pred = *lastSamPrediction;
                                 pred.host = frame->host;
                                 double dtInfer = lastInferenceHost - prevInferenceHost;
                                 double dtSkip = frame->host - lastInferenceHost;
-                                if (!shouldInfer && prevSamPrediction && dtInfer > 0.015 && dtInfer < 0.15 && dtSkip > 0 && dtSkip < 0.12) {
+                                if (!inferred && prevSamPrediction && dtInfer > 0.015 && dtInfer < 0.15 && dtSkip > 0 && dtSkip < 0.12) {
                                     double ratio = std::clamp(dtSkip / dtInfer, 0.0, 1.0);
                                     for (int i = 0; i < 70; ++i) {
                                         V3 vel = lastSamPrediction->cameraPoints[i] - prevSamPrediction->cameraPoints[i];
@@ -695,12 +672,13 @@ void Engine::processLoop() {
                     } else {
                         keypoints = kinectImageLabels(model.infer(*frame, *lastCrop));
                         inferenceMs = (now() - begin) * 1000;
-                        lastMeasuredInferenceMs = inferenceMs;
+                        lastMeasuredInferenceMs = inferenceMs;inferred=true;
                     }
                 } catch (const std::exception &e) {
-                    message(e.what());
+                    inferenceFailed=true;message(e.what());
                 }
             }
+            if(inferred)health.inferred(now());
             // Calibration consumes only the raw, currently depth-registered evidence.
             const auto calibrationPrior=learned;
             const double bodyStart=now();
@@ -711,6 +689,10 @@ void Engine::processLoop() {
             const double bodyMs=(now()-bodyStart)*1000;
             auto state = estimator.process(*frame, keypoints ? &*keypoints : nullptr, config.calibration,learned?&*learned:nullptr);
             state.fitMs+=bodyMs;
+            const double workerMs=(now()-workStart)*1000;
+            if(inferred && !config.replay)cadenceControl.observe(frame->host,workerMs,queueWaitMs);
+            health.frame(reused,inferenceFailed,id && config.settings.inference &&
+                config.settings.baseline==0 && (sam.ready() || nlf.ready()) && !learned,state);
             auto rawBody = std::find_if(frame->bodies.begin(), frame->bodies.end(),
                                         [&](const Body &body) { return body.id == id; });
             if(collectingBody){std::lock_guard l(mutex_);collectingBody=view_.bodyCollecting;}
@@ -737,11 +719,9 @@ void Engine::processLoop() {
             view_.frame = frame;
             view_.state = state;
             view_.samOverlay=samOverlay;
-            std::string cadenceDesc = cadence == 1 ? "Full (30 Hz)" :
-                                      cadence == 2 ? "Balanced (20 Hz)" :
-                                      cadence == 3 ? "Low GPU (15 Hz)" :
-                                      (autoThrottleRemaining > 0 ? (autoThrottleLevel == 2 ? "Auto (throttled 15 Hz)" : "Auto (throttled 20 Hz)") : "Auto (30 Hz)");
-            view_.cadenceStatus = cadenceDesc;
+            view_.cadenceStatus=(cadence==0?"Auto":cadence==1?"Full":cadence==2?"Balanced":"Low GPU")+
+                std::string(" (up to ")+std::to_string(cadenceControl.hz())+" Hz)";
+            view_.health=health.snapshot(now(),workerMs);
             view_.poseSource=(sam.ready() || nlf.ready())?(learned && std::any_of(state.learnedPosition.begin(),state.learnedPosition.end(),[](bool b){return b;})?
                 (learned->vrAnchored?poseName+" body + gentle horizontal correction":learned->depthPredicted?poseName+" body / distance estimated ("+std::to_string(int(learned->depthAge*1000))+" ms)":
                 poseName+" body + depth ("+std::to_string(learned->rootAnchors)+" supports)"):
@@ -750,7 +730,7 @@ void Engine::processLoop() {
                 "SDK fallback: "+poseName+" depth anchor unavailable"):"";
             view_.lengths = estimator.lengths();
             view_.inferenceMs = lastMeasuredInferenceMs;
-            view_.queueMs = config.replay ? 0 : std::max(0.0, (begin - frame->arrival) * 1000);
+            view_.queueMs = config.replay ? 0 : queueWaitMs;
             view_.arrivalToEstimateMs = config.replay ? 0 : (now() - frame->arrival) * 1000;
             ++view_.frames;
             if(view_.collecting) {
@@ -777,6 +757,7 @@ void Engine::outputLoop() {
     timeBeginPeriod(1);
     OscOutput osc;SteamVrBridge bridge;
     HANDLE writer=CreateMutexW(nullptr,FALSE,L"Local\\KinectFBT_Writer_v1");bool claimed=false;
+    std::array<bool,3> previousOutputValid{};
     while(run_) {
         auto s=view();bool wants=s.output && s.calibration.valid && !s.replay;
         std::string status;
@@ -789,9 +770,19 @@ void Engine::outputLoop() {
                 if(!ok)status="SteamVR connection busy";
                 else if(!active)status="SteamVR driver not running - restart SteamVR after installation";
                 else if(!packet.enabled)status="Waiting for the SteamVR coordinate origin";
-                else status="SteamVR hip and foot trackers connected";
+                else {
+                    int validCount=0;
+                    std::lock_guard l(mutex_);
+                    for(int i=0;i<3;++i) {
+                        bool valid=bridgeTrackingStatus(packet,i,packet.published).valid;
+                        if(previousOutputValid[i] && !valid)++view_.outputValidityLosses[i];
+                        previousOutputValid[i]=valid;validCount+=valid;
+                    }
+                    status="SteamVR output: "+std::to_string(validCount)+"/3 trackers valid";
+                }
             }else status="Another tracker app is using SteamVR output";
         }else {
+            previousOutputValid={};
             if(claimed){BridgePacket off;off.published=now();bool ready;bridge.publish(off,ready);ReleaseMutex(writer);claimed=false;}
             if(wants) {
                 auto trackers=deliveryState(s.state,now()).trackers;
@@ -901,6 +892,10 @@ void Engine::exportDiagnostics() {
       << "\nmode=" << modeName(s.state.mode) << "\nframes=" << s.frames
       << "\nqueue_drops=" << s.dropped << "\nrecord_drops=" << s.recordDrops << "\nOSC_sent=" << s.sent
       << "\nOSC_send_errors=" << s.sendErrors << "\ninference_ms=" << s.inferenceMs
+      << "\nneural_cadence=" << s.cadenceStatus << "\nneural_actual_hz=" << s.health.neuralHz
+      << "\nneural_result_age_ms=" << s.health.neuralAgeMs << "\nworker_ms=" << s.health.workerMs
+      << "\nneural_runs=" << s.health.inferences << "\nneural_reused_frames=" << s.health.reusedFrames
+      << "\ninference_errors=" << s.health.inferenceErrors << "\nmissing_body_prior_frames=" << s.health.missingPriorFrames
       << "\nfit_ms=" << s.state.fitMs << "\nqueue_ms=" << s.queueMs
         << "\narrival_to_estimate_ms=" << s.arrivalToEstimateMs << "\ncalibration_rms_m=" << s.calibration.rms
       << "\npose_source=" << s.poseSource << "\nselected_model=" << (s.modelChoice==3?"SAM optimized":s.modelChoice==2?"SAM selective FP8":s.modelChoice==1?"NLF-S":"SAM FP16")
@@ -914,6 +909,9 @@ void Engine::exportDiagnostics() {
       << "\ncalibration_rms_limit_m=" << calibrationMaxRms
       << "\ncalibration_min_consistent_fraction=" << calibrationMinInlierFraction
       << "\nNOTE: latest samples, not percentile latency; no motion-to-photon claim.\n";
+    for(int i=0;i<3;++i)f<<"\ntracker_"<<i<<"_validity_losses="<<s.health.validityLosses[i]
+        <<"\ntracker_"<<i<<"_source_changes="<<s.health.sourceChanges[i]
+        <<"\ntracker_"<<i<<"_output_validity_losses="<<s.outputValidityLosses[i];
     if(s.frame)f<<"\nsensor_version="<<s.frame->sensorVersion<<"\ncolor_dimensions="<<s.frame->width<<'x'<<s.frame->height
         <<"\ndepth_dimensions="<<s.frame->depthWidth<<'x'<<s.frame->depthHeight<<"\ncapture_ms="<<s.frame->captureMs
         <<"\ncolor_exposure_ms="<<s.frame->exposureMs<<"\ncolor_interval_ms="<<s.frame->colorIntervalMs<<'\n';

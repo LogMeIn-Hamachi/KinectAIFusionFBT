@@ -1,4 +1,5 @@
 #include "steamvr_bridge.hpp"
+#include "tracker_smoothing.hpp"
 #include <openvr_driver.h>
 #include <cstdio>
 namespace {
@@ -9,12 +10,7 @@ class Device final:public vr::ITrackedDeviceServerDriver {
     vr::DriverPose_t pose_{};
     std::mutex mutex_;
     int role_;
-    kf::V3 currentPos_{};
-    kf::Q currentRot_{1, 0, 0, 0};
-    double currentSpeed_{0};
-    double currentAngSpeed_{0};
-    double lastTime_{0};
-    bool initialized_{false};
+    kf::TrackerSmoothing smoothing_;
 public:
     explicit Device(int role):role_(role){}
     vr::EVRInitError Activate(uint32_t index)override {
@@ -39,7 +35,7 @@ public:
         if(error!=vr::VRSettingsError_None || !current[0])vr::VRSettings()->SetString("trackers",key.c_str(),roles[role_]);
         return vr::VRInitError_None;
     }
-    void Deactivate()override{index_=vr::k_unTrackedDeviceIndexInvalid;initialized_=false;}
+    void Deactivate()override{std::lock_guard l(mutex_);index_=vr::k_unTrackedDeviceIndexInvalid;smoothing_.reset();}
     void EnterStandby()override{}
     void* GetComponent(const char*)override{return nullptr;}
     void DebugRequest(const char*,char* out,uint32_t n)override{if(n)out[0]=0;}
@@ -48,50 +44,21 @@ public:
         vr::DriverPose_t p{};
         p.qWorldFromDriverRotation.w=p.qDriverFromHeadRotation.w=p.qRotation.w=1;
         auto& in=packet.poses[role_];
-        p.deviceIsConnected=kf::validPacket(packet,time) && in.valid && time<=in.validUntil;
-        p.poseIsValid=p.deviceIsConnected;
-        p.result=p.poseIsValid?vr::TrackingResult_Running_OK:vr::TrackingResult_Uninitialized;
+        const auto tracking=kf::bridgeTrackingStatus(packet,role_,time);
+        p.deviceIsConnected=tracking.connected;
+        p.poseIsValid=tracking.valid;
+        p.result=p.poseIsValid?vr::TrackingResult_Running_OK:
+            p.deviceIsConnected?vr::TrackingResult_Running_OutOfRange:vr::TrackingResult_Uninitialized;
+        std::unique_lock lock(mutex_);
         if(p.poseIsValid) {
             kf::V3 targetPos{in.position[0],in.position[1],in.position[2]};
             kf::Q targetRot{in.rotation[0],in.rotation[1],in.rotation[2],in.rotation[3]};
 
-            if(!initialized_ || time-lastTime_>0.25 || time<lastTime_) {
-                currentPos_=targetPos;
-                currentRot_=targetRot;
-                currentSpeed_=0.0;
-                currentAngSpeed_=0.0;
-                initialized_=true;
-            } else {
-                double dt=std::clamp(time-lastTime_,0.001,0.050);
-                double dist=kf::norm(targetPos-currentPos_);
-                if(dist>0.35) {
-                    currentPos_=targetPos;
-                    currentRot_=targetRot;
-                    currentSpeed_=0.0;
-                    currentAngSpeed_=0.0;
-                } else {
-                    // Adaptive 1st-order low-pass filter (1-Euro style exponential smoothing):
-                    // Strictly monotonic approach without spring oscillation, overshoot, or rubber-banding.
-                    double rawSpeed=dist/dt;
-                    double speedAlpha=1.0-std::exp(-dt/0.030);
-                    currentSpeed_+=(rawSpeed-currentSpeed_)*speedAlpha;
-                    double fc=std::clamp(6.0+16.0*currentSpeed_,6.0,28.0);
-                    double tau=1.0/(2.0*kf::pi*fc);
-                    double alpha=1.0-std::exp(-dt/tau);
-                    currentPos_+=(targetPos-currentPos_)*alpha;
-
-                    targetRot=kf::continuous(targetRot,currentRot_);
-                    double angDist=kf::angleBetween(currentRot_,targetRot);
-                    double rawAngSpeed=angDist/dt;
-                    double angSpeedAlpha=1.0-std::exp(-dt/0.030);
-                    currentAngSpeed_+=(rawAngSpeed-currentAngSpeed_)*angSpeedAlpha;
-                    double fcRot=std::clamp(8.0+4.0*currentAngSpeed_,8.0,32.0);
-                    double tauRot=1.0/(2.0*kf::pi*fcRot);
-                    double alphaRot=1.0-std::exp(-dt/tauRot);
-                    currentRot_=kf::normalized(kf::blend(currentRot_,targetRot,alphaRot));
-                }
-            }
-            lastTime_=time;
+            // validUntil encodes the source observation time in protocol v2.
+            // Publishing the same sample at compositor rate is not new motion.
+            smoothing_.update(targetPos,targetRot,in.validUntil-kf::outputHoldSeconds,time);
+            const auto currentPos_=smoothing_.position();
+            const auto currentRot_=smoothing_.rotation();
 
             p.poseTimeOffset=0.0;
             p.vecPosition[0]=currentPos_.x;p.vecPosition[1]=currentPos_.y;p.vecPosition[2]=currentPos_.z;
@@ -99,9 +66,9 @@ public:
             p.qRotation={currentRot_.w,currentRot_.x,currentRot_.y,currentRot_.z};
             p.vecAngularVelocity[0]=0.0;p.vecAngularVelocity[1]=0.0;p.vecAngularVelocity[2]=0.0;
         } else {
-            initialized_=false;
+            smoothing_.reset();
         }
-        {std::lock_guard l(mutex_);pose_=p;}
+        pose_=p;lock.unlock();
         if(index_!=vr::k_unTrackedDeviceIndexInvalid)vr::VRServerDriverHost()->TrackedDevicePoseUpdated(index_,p,sizeof(p));
     }
 };

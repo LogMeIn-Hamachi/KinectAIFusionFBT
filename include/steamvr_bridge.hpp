@@ -27,6 +27,14 @@ inline bool validPacket(const BridgePacket& p,double time) {
     }
     return true;
 }
+struct BridgeTrackingStatus {bool connected{},valid{};};
+inline BridgeTrackingStatus bridgeTrackingStatus(const BridgePacket& packet,int role,double time) {
+    if(role<0 || role>=3 || !validPacket(packet,time))return {};
+    const auto& pose=packet.poses[role];
+    // A live device with a temporarily unobserved foot is still connected.
+    // Tracking validity must expire, without hot-unplugging the virtual device.
+    return {true,pose.valid && time<=pose.validUntil};
+}
 inline BridgePacket trackerPacket(const State& state,const Calibration& cal,const VrSample& vr,double time,bool enabled) {
     BridgePacket packet;packet.published=time;
     if(!enabled || !cal.valid || !trackingReferenceValid(cal,vr))return packet;

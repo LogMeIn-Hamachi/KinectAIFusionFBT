@@ -3,6 +3,7 @@
 #include "model.hpp"
 #include "alignment.hpp"
 #include "tilt.hpp"
+#include "tracking_health.hpp"
 #include <thread>
 namespace kf {
 struct View {
@@ -11,7 +12,7 @@ struct View {
     std::optional<Keypoints> samOverlay;
     std::string poseSource;
     int modelChoice{}; // 0 SAM original, 1 NLF-S, 2 SAM FP8, 3 SAM optimized; stopped only.
-    int cadenceChoice{}; // 0 Auto (GPU adaptive), 1 Full (30 Hz), 2 Balanced (20 Hz), 3 Low GPU (15 Hz)
+    int cadenceChoice{}; // 0 Auto (worker-budget adaptive), 1 Full (30 Hz), 2 Balanced (20 Hz), 3 Low GPU (15 Hz)
     std::string cadenceStatus{"Auto (30 Hz)"};
     bool prefer30{false};
     std::string exposureStatus;
@@ -21,6 +22,8 @@ struct View {
     std::string modelHash;
     std::string sensor = "Stopped", inference = "Not loaded", vr = "SteamVR not connected",
                 notice = "Start the sensor or open a local recording.";
+    TrackingStats health;
+    std::array<uint64_t,3> outputValidityLosses{};
     double inferenceMs{}, queueMs{}, arrivalToEstimateMs{};
     std::uint64_t frames{}, sent{}, sendErrors{}, dropped{}, recordDrops{};
     bool running{}, recording{}, replay{}, output{}, collecting{};

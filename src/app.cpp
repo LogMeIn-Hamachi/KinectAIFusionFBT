@@ -221,7 +221,7 @@ void paint() {
     d << wide(modeName(s.state.mode)) << L"\n" << wide(s.poseSource) << L"\n"
       << wide(s.sensor) << L"\n\n"
       << wide(s.inference) << L"\n"
-      << L"Cadence  " << wide(s.cadenceStatus) << L"\n\n"
+      << L"Neural  " << wide(s.cadenceStatus) << L" / " << std::fixed << std::setprecision(1) << s.health.neuralHz << L" actual Hz\n\n"
       << wide(s.vr) << L"\n\n"
       << std::fixed << std::setprecision(1) << L"Frames  " << s.frames << L"    Dropped  " << s.dropped
       << L"\nInference  " << s.inferenceMs << L" ms    Fit  " << s.state.fitMs << L" ms\nQueue age  "
