@@ -36,6 +36,16 @@ These changes follow the accepted v1.0.1 baseline and await user testing. Publis
 
 Validation: full Release build and all ten CTest suites pass. Added synthetic coverage for 15/20/30 fps camera/rate combinations, startup spikes, sustained load and recovery, backlog recovery, replay, mode/clock changes, health counters, 90/120/144 Hz driver derivatives, quaternion sign flips, convergence, reacquisition, and connected-but-untracked poses. No live camera, recording or VR output was started. Test success is not a live accuracy or GPU-load measurement.
 
+## Private development — 2026-09-17: OSC output parity
+
+OSC remains the secondary output. `include/osc_tracking.hpp` now uses the same `trackerPacket` bounded prediction (up to 100 ms total), source validity deadlines and `TrackerSmoothing` implementation as the native driver. Previously OSC had only the estimator smoothing and at most 40 ms output prediction. Smoothing occurs in the fixed physical reference; the live raw-to-standing playspace transform is applied afterward, followed once by the existing Unity reflection and ZXY Euler serialization. No head OSC messages or head anchoring were added.
+
+The existing output loop sends at roughly 125 Hz before work/scheduling overhead, independent of neural cadence. OSC is not synchronized to the compositor. It retains nonblocking localhost UDP and one coherent immediate bundle of position/rotation pairs with stable tracker IDs. Invalid trackers are omitted individually and their filter history resets. Pause, invalid live reference, calibration/reference or player changes reset filtering. Legacy OSC-only calibrations without a raw reference remain supported. Native output behavior and the default output selection are unchanged.
+
+OSC status now shows valid tracker count, missing-reference waits and send failures. Output validity counters also cover OSC sender-side transitions; successful UDP sends do not acknowledge VRChat reception. The documented [VRChat OSC tracker API](https://docs.vrchat.com/docs/osc-trackers) provides position/rotation but no explicit per-tracker validity/disconnect message. We stop refreshing expired poses; VRChat controls receiver timeout and IK behavior, so this cannot duplicate SteamVR's immediate invalid-pose reporting.
+
+Validation: Release build and all ten CTest suites pass. The SteamVR output suite compares the actual OSC helper against native prediction/filtering for 15/30 Hz camera samples at 125 Hz delivery, including rotations, head gaze changes, OVR translation/rotation/reset, independent foot expiration, lost-reference rejection, recalibration and legacy OSC alignment. Existing core tests cover OSC wire encoding, stable addresses, units/handedness and malformed-pose rejection. No live OSC or tracker output was enabled; receiver-side feel still needs user validation.
+
 ## Complete Chronological Changelog of Improvements (Preview 23 to v1.0.1)
 
 1. **Adaptive GPU Cadence (`ca27b01`, `4d1041d`, `e69b745`)**:

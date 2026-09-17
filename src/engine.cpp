@@ -5,6 +5,7 @@
 #include "steamvr_bridge.hpp"
 #include "vr_overlay.hpp"
 #include "neural_cadence.hpp"
+#include "osc_tracking.hpp"
 #include <timeapi.h>
 #include <iomanip>
 #include <sstream>
@@ -756,12 +757,14 @@ void Engine::processLoop() {
 void Engine::outputLoop() {
     timeBeginPeriod(1);
     OscOutput osc;SteamVrBridge bridge;
+    OscTracking oscTracking;
     HANDLE writer=CreateMutexW(nullptr,FALSE,L"Local\\KinectFBT_Writer_v1");bool claimed=false;
     std::array<bool,3> previousOutputValid{};
     while(run_) {
         auto s=view();bool wants=s.output && s.calibration.valid && !s.replay;
         std::string status;
         if(wants && s.steamVrOutput) {
+            oscTracking.reset();
             if(!claimed && writer){auto result=WaitForSingleObject(writer,0);claimed=result==WAIT_OBJECT_0 || result==WAIT_ABANDONED;}
             bool active=bridge.driverReady();
             if(claimed && s.frame) {
@@ -782,21 +785,32 @@ void Engine::outputLoop() {
                 }
             }else status="Another tracker app is using SteamVR output";
         }else {
-            previousOutputValid={};
             if(claimed){BridgePacket off;off.published=now();bool ready;bridge.publish(off,ready);ReleaseMutex(writer);claimed=false;}
             if(wants) {
-                auto trackers=deliveryState(s.state,now()).trackers;
                 const bool referenceReady=!s.calibration.rawReferenceValid ||
                     (s.frame && trackingReferenceValid(s.calibration,s.frame->vr));
-                const auto transform=s.calibration.rawReferenceValid && referenceReady?
-                    currentStandingCalibration(s.calibration,s.frame->vr):s.calibration.transform;
-                auto bytes=referenceReady?oscBundle(trackers,transform):std::vector<uint8_t>{};
+                auto trackers=referenceReady?oscTracking.update(s.state,s.calibration,
+                    s.frame?s.frame->vr:VrSample{},now()):std::array<Tracker,3>{};
+                if(!referenceReady)oscTracking.reset();
+                auto bytes=oscBundle(trackers,{});
+                int validCount=0;
+                {std::lock_guard l(mutex_);
+                    for(int i=0;i<3;++i) {
+                        if(previousOutputValid[i] && !trackers[i].valid)++view_.outputValidityLosses[i];
+                        previousOutputValid[i]=trackers[i].valid;validCount+=trackers[i].valid;
+                    }
+                }
+                status=!referenceReady?"OSC waiting for the SteamVR coordinate origin":
+                    "OSC output: "+std::to_string(validCount)+"/3 trackers valid";
                 if(!bytes.empty()) {
                     bool ok=osc.send(bytes);std::lock_guard l(mutex_);
                     if(ok)++view_.sent;else ++view_.sendErrors;
+                    if(!ok)status="OSC send failed";
                 }
-                status="OSC output active";
-            }else status=s.steamVrOutput?(bridge.driverReady()?"SteamVR driver ready - output paused":"SteamVR driver not running - restart SteamVR after installation"):"OSC output paused";
+            }else {
+                oscTracking.reset();previousOutputValid={};
+                status=s.steamVrOutput?(bridge.driverReady()?"SteamVR driver ready - output paused":"SteamVR driver not running - restart SteamVR after installation"):"OSC output paused";
+            }
         }
         {std::lock_guard l(mutex_);view_.outputStatus=status;}
         if (overlay_) {

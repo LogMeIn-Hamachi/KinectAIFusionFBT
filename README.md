@@ -110,7 +110,7 @@ In the **Advanced** tab of `KinectRGBD.exe`:
   - The displayed actual Hz counts completed AI estimates. All modes are limited by camera delivery and available processing time. A camera delivering 15 fps cannot produce 30 new image estimates per second; selecting 15 Hz does not halve that camera rate again.
   - If tracking seems to drop in and out, click **Diagnostics** after reproducing it. The report separates deliberate AI-result reuse from missing estimates, source switches and tracker validity losses. A temporarily untracked foot stays connected to SteamVR but has an invalid pose until it is observed again.
 - **Model Selection**: Switch between **SAM optimized** (fastest, FP8 + TF32) and **SAM original**.
-- **OSC Output**: Optional standalone VRChat OSC output on `localhost:9000` (alternative to native SteamVR drivers).
+- **OSC Output**: Secondary VRChat output on `localhost:9000`. Uses the same adaptive position/rotation smoothing and bounded prediction as the SteamVR driver, with playspace movement applied after smoothing. Enable OSC in VRChat and select OSC output in the app, then enable output. Expired trackers stop sending updates; VRChat controls how long its last received pose remains visible. App-side smoothing is shared, but receiver timing and tracking-loss behavior can differ from native SteamVR.
 
 ---
 

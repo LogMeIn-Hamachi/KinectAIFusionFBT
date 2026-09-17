@@ -624,7 +624,7 @@ std::vector<std::uint8_t> oscBundle(const std::array<Tracker, 3> &t, const Rigid
     for (auto &a : t) {
         if (!a.valid)
             continue;
-        if (!finite(a.p) || norm(a.p) > 20 || !std::isfinite(dot(a.q, a.q)) ||
+        if (!finite(a.p) || norm(a.p) > 50 || !std::isfinite(dot(a.q, a.q)) ||
             std::abs(dot(a.q, a.q) - 1) > .001 || !finite(transform.apply(a.p)) ||
             norm(transform.apply(a.p)) > 50)
             return {};

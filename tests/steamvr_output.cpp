@@ -1,6 +1,7 @@
 #include "steamvr_bridge.hpp"
 #include "alignment.hpp"
 #include "tracker_smoothing.hpp"
+#include "osc_tracking.hpp"
 #include <openvr_driver.h>
 #include <iostream>
 using namespace kf;
@@ -135,6 +136,67 @@ int main(){try {
         // Stop at the last point: fresh identical samples must remove velocity.
         for(int i=1;i<=30;++i)filter.update({.6,0,0},axisAngle({0,1,0},1.2),4+i/30.,4+i/30.);
         check(filter.speed()<1e-6,"Stationary target retained adaptive speed");
+    }
+    // OSC and native driver consume identical predicted poses and smoothing.
+    // Compare physical motion at both camera rates, including live OVR changes.
+    auto oscVr=vr;oscVr.rawTransformValid=true;
+    for(double cameraHz:{15.,30.}) {
+        OscTracking osc;
+        std::array<TrackerSmoothing,3> native;
+        State moving=s;moving.body.id=42;
+        for(int tick=0;tick<375;++tick) {
+            double time=20+tick/125.;
+            double sample=20+std::floor((time-20)*cameraHz+1e-7)/cameraHz;
+            moving.host=moving.lastObserved=sample;
+            for(int i=0;i<3;++i) {
+                auto& tracker=moving.trackers[i];tracker.valid=true;tracker.observedHost=sample;
+                tracker.p={.15*(sample-20)+i*.2,i?0.05:1.0,2};
+                tracker.velocity={.15,0,0};tracker.q=axisAngle({0,1,0},.4*(sample-20));
+            }
+            auto space=oscVr;space.rawTransformValid=true;
+            Rigid drag=tick>=100 && tick<250?Rigid{axisAngle({0,1,0},.8),{.5,1,-.4}}:
+                tick>=250 && tick<300?Rigid{{},{25,0,0}}:Rigid{};
+            space.standingToRaw=composeRigid(oscVr.standingToRaw,inverseRigid(drag));
+            space.devices[0].q=axisAngle({1,0,0},std::sin(time)); // gaze cannot move trackers
+            auto packet=trackerPacket(moving,cal,space,time,true);
+            auto output=osc.update(moving,cal,space,time);
+            for(int i=0;i<3;++i) {
+                const auto& pose=packet.poses[i];
+                native[i].update({pose.position[0],pose.position[1],pose.position[2]},
+                    {pose.rotation[0],pose.rotation[1],pose.rotation[2],pose.rotation[3]},
+                    pose.validUntil-outputHoldSeconds,time);
+                auto toStanding=inverseRigid(space.standingToRaw);
+                check(output[i].valid,"OSC lost a valid tracker");
+                check(norm(output[i].p-toStanding.apply(native[i].position()))<1e-9,"OSC prediction/smoothing or space drag differs from native output");
+                check(angleBetween(output[i].q,toStanding.q*native[i].rotation())<1e-6,"OSC rotation differs from native smoothing");
+            }
+            check(!oscBundle(output,{}).empty(),"Smoothed OSC output failed serialization");
+        }
+        moving.host=moving.lastObserved=24;
+        moving.trackers[0].observedHost=moving.trackers[1].observedHost=24;
+        auto partial=osc.update(moving,cal,oscVr,24.01);
+        check(partial[0].valid && partial[1].valid && !partial[2].valid,"OSC did not expire a foot independently");
+        auto bytes=oscBundle(partial,{});
+        std::string wire(bytes.begin(),bytes.end());
+        check(wire.find("/tracking/trackers/3/")==std::string::npos,"OSC refreshed an expired foot");
+        check(oscBundle(osc.update(moving,cal,oscVr,25),{}).empty(),"OSC sent stale poses after capture stopped");
+        auto restarted=oscVr;restarted.epoch++;
+        check(oscBundle(osc.update(moving,cal,restarted,24.02),{}).empty(),"OSC reused a reference across a SteamVR restart");
+        auto changed=cal;changed.transform.t.x+=.1;
+        auto reacquired=osc.update(moving,changed,oscVr,24.01);
+        auto expectedPose=trackerPacket(moving,changed,oscVr,24.01,true).poses[0];
+        auto expectedPos=inverseRigid(oscVr.standingToRaw).apply({expectedPose.position[0],expectedPose.position[1],expectedPose.position[2]});
+        check(norm(reacquired[0].p-expectedPos)<1e-9,"OSC retained filter history across calibration change");
+        // Change calibration while tracking remains live: even a small change
+        // must not be mistaken for motion to smooth across.
+        auto changedAgain=changed;changedAgain.transform.t.x+=.04;
+        auto activeChange=osc.update(moving,changedAgain,oscVr,24.02);
+        auto activePacket=trackerPacket(moving,changedAgain,oscVr,24.02,true).poses[0];
+        auto activeExpected=inverseRigid(oscVr.standingToRaw).apply({activePacket.position[0],activePacket.position[1],activePacket.position[2]});
+        check(norm(activeChange[0].p-activeExpected)<1e-9,"Active OSC calibration change was smoothed as motion");
+        osc.reset();auto legacy=cal;legacy.rawReferenceValid=false;
+        auto legacyOutput=osc.update(moving,legacy,VrSample{},24.01);
+        check(legacyOutput[0].valid && norm(legacyOutput[0].p-legacy.transform.apply(moving.trackers[0].p+V3{.0015,0,0}))<1e-8,"Legacy OSC-only calibration regressed");
     }
     HMODULE dll=LoadLibraryW(L"driver_kinect_fbt.dll");check(dll!=nullptr,"SteamVR driver DLL cannot load");
     using Factory=void*(*)(const char*,int*);auto factory=reinterpret_cast<Factory>(GetProcAddress(dll,"HmdDriverFactory"));
