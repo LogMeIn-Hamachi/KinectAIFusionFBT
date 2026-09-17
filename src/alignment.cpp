@@ -169,16 +169,19 @@ void AlignmentSession::writeCsv(std::ostream &out, const Calibration &cal,bool h
         out << '\n';
     }
 }
-AlignmentCue alignmentCue(int step,double elapsed,bool done,bool waiting) {
+std::string alignmentPoseInstruction(int step) {
     constexpr const char* poses[]{
-        "Hands low in front of you. Point both controllers down.",
-        "Hands comfortably forward at chest height. Point controllers forwards.",
-        "Hands comfortably apart. Point controllers diagonally out to each side.",
-        "Hands in front of your chest. Point both controllers up.",
-        "Check: hands forward and shoulder-width apart, clear of your torso. Point controllers forwards."};
+        "Hands just ahead of your waist, shoulder-width apart. Tilt controllers down; keep wrists clear of your body.",
+        "Bend your elbows. Bring hands forward at lower chest height and point controllers towards the camera.",
+        "Open your hands a little wider than your shoulders, still in front of you. Turn controllers diagonally outwards. No wide stretch needed.",
+        "Keep elbows low and hands in front of your lower chest. Tilt controllers upwards. Do not lift your hands above your head.",
+        "Check: bring hands forward, shoulder-width apart, between waist and chest height. Point forwards and keep wrists clear of your body."};
+    return poses[std::clamp(step,0,calibrationPoseCount-1)];
+}
+AlignmentCue alignmentCue(int step,double elapsed,bool done,bool waiting) {
     AlignmentCue c;c.step=std::clamp(step,0,calibrationPoseCount-1);
     if(done){c.instruction="Alignment finished.";return c;}
-    c.instruction="Pose "+std::to_string(c.step+1)+" of 5: "+poses[c.step];
+    c.instruction="Pose "+std::to_string(c.step+1)+" of 5: "+alignmentPoseInstruction(c.step);
     c.waitingForReady=waiting;
     if(waiting) {
         c.speech=c.instruction+" Take your time. Squeeze either trigger when ready.";return c;
@@ -186,6 +189,7 @@ AlignmentCue alignmentCue(int step,double elapsed,bool done,bool waiting) {
     if(elapsed<0) {
         c.seconds=int(std::ceil(-elapsed));c.speech="Ready. Settle for three seconds.";return c;
     }
+    c.retrySeconds=std::max(0,int(std::ceil(20-elapsed)));
     c.collecting=true;c.seconds=std::max(0,int(std::ceil(calibrationHoldSeconds-elapsed)));
     c.speech="Hold still while this pose is captured.";return c;
 }
@@ -225,19 +229,22 @@ void GuidedAlignment::writeCsv(std::ostream& out)const{for(int i=0;i<5;++i)sessi
 void GuidedAlignment::add(const Frame& frame,uint32_t id,const Settings& settings,const PosePrior* prior) {
     if(done_)return;
     floor_.add(frame.host,frame.floor);
-    bool available=false,pressed=false;
-    if(std::abs(frame.vr.host-frame.host)<.04)for(int side=0;side<2;++side)
-        if(frame.vr.devices[side+1].valid && frame.vr.triggerAvailable[side]) {
-            available=true;pressed=pressed || frame.vr.triggerPressed[side];
-        }
-    if(available) {
-        if(!pressed)triggerReleased_=true;
-        else if(triggerReleased_) {capturePose(frame.host);triggerReleased_=false;}
+    bool startRequested=false;
+    for(int side=0;side<2;++side) {
+        const bool available=std::abs(frame.vr.host-frame.host)<.04 &&
+            frame.vr.devices[side+1].valid && frame.vr.triggerAvailable[side];
+        if(!available){triggerReleased_[side]=false;continue;}
+        const bool pressed=frame.vr.triggerPressed[side];
+        startRequested|=pressed && triggerReleased_[side];
+        triggerReleased_[side]=!pressed;
     }
+    // Each trigger has its own release edge. A held/stuck trigger on one
+    // controller must not prevent using the other to retry a failed pose.
+    if(startRequested)capturePose(frame.host);
     if(!captureStart_)return;
     const double elapsed=frame.host-*captureStart_;
     auto retry=[&](const std::string& why) {
-        captureStart_.reset();triggerReleased_=false;retryReason_=why;
+        captureStart_.reset();triggerReleased_={};retryReason_=why;
         result_.valid=false;result_.reason=why;sessions_[stage_].reset(true,true);
     };
     if(elapsed>20){retry("Could not see both wrists steadily. Adjust your position, then squeeze a trigger to retry this pose. Earlier poses are kept.");return;}
@@ -256,7 +263,7 @@ void GuidedAlignment::add(const Frame& frame,uint32_t id,const Settings& setting
     // Waiting for visibility is not hold time. Require a real span of paired
     // steady observations and a recent observation of BOTH wrists before moving on.
     for(int d=1;d<=2;++d)if(count[d]<12 || last[d]-first[d]<calibrationHoldSeconds || frame.host-last[d]>.4)return;
-    if(stage_<3){++stage_;stageStart_=frame.host;captureStart_.reset();triggerReleased_=false;return;}
+    if(stage_<3){++stage_;stageStart_=frame.host;captureStart_.reset();triggerReleased_={};return;}
     if(stage_==3) {
         std::vector<AlignmentObservation> fit;
         for(int i=0;i<4;++i){const auto& a=sessions_[i].samples();fit.insert(fit.end(),a.begin(),a.end());}
@@ -269,7 +276,7 @@ void GuidedAlignment::add(const Frame& frame,uint32_t id,const Settings& setting
             stage_=2;sessions_[3].reset(true,true);
             retry("Need clearer controller directions. Repeat the outward and upward poses; the first two are kept. "+candidate_.reason);return;
         }
-        ++stage_;stageStart_=frame.host;captureStart_.reset();triggerReleased_=false;return;
+        ++stage_;stageStart_=frame.host;captureStart_.reset();triggerReleased_={};return;
     }
     session.applyOffsets(offsets_);
     // Independent check: never refit the transform on this fifth pose.

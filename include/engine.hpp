@@ -39,6 +39,8 @@ struct View {
     bool bodyCollecting{};
     bool wristOffsetsReady{};
     bool calibrationWaiting{};
+    bool calibrationCapturing{};
+    int calibrationRetrySeconds{};
     bool calibrationRetrying{};
     std::string calibrationRetryReason;
     bool steamVrOutput{true};

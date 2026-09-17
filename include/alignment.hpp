@@ -81,10 +81,11 @@ class AlignmentSession {
 };
 Calibration calibrateControllers(std::span<const AlignmentObservation>, std::array<V3,3> &offsets,const Plane* floor=nullptr);
 struct AlignmentCue {
-    int step{}, seconds{};
+    int step{}, seconds{}, retrySeconds{};
     bool collecting{},waitingForReady{};
     std::string instruction, speech;
 };
+std::string alignmentPoseInstruction(int step);
 AlignmentCue alignmentCue(int step,double elapsed,bool done=false,bool waiting=false);
 Calibration calibrateKnownOffsets(std::span<const AlignmentObservation> fit,
                                   std::span<const AlignmentObservation> validation={},const Plane* floor=nullptr);
@@ -93,7 +94,7 @@ class GuidedAlignment {
     int stage_{};
     double stageStart_{};
     std::optional<double> captureStart_;
-    bool triggerReleased_{};
+    std::array<bool,2> triggerReleased_{};
     std::string retryReason_;
     bool done_{};
     Calibration result_;

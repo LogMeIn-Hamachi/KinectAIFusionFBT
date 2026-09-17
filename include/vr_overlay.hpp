@@ -1,12 +1,15 @@
 #pragma once
 #include <memory>
 #include <string>
+#include <optional>
+#include <mutex>
 
 namespace kf {
 
 struct OverlayState {
     bool active{false};
     int step{0};               // 0 to 4
+    int retrySeconds{};
     int secondsRemaining{0};   // Settle or capture seconds
     bool waitingForReady{false};
     bool collecting{false};    // true = holding still during capture
@@ -25,9 +28,28 @@ struct OverlayState {
     bool rightTrigger{false};
     bool leftTracked{false};
     bool rightTracked{false};
+    bool operator==(const OverlayState&) const = default;
+};
+
+// Commit only successfully displayed states. Retry failed uploads even when the
+// calibration state is unchanged; periodically refresh after runtime disruption.
+class OverlayRefresh {
+    std::optional<OverlayState> displayed_;
+    double nextAttempt_{}, lastSuccess_{};
+public:
+    bool due(const OverlayState& state,double now) const {
+        return now>=nextAttempt_ && (!displayed_ || *displayed_!=state || now-lastSuccess_>=1.);
+    }
+    void complete(const OverlayState& state,double now,bool success) {
+        nextAttempt_=now+(success?.1:.25);
+        if(success){displayed_=state;lastSuccess_=now;}
+        else displayed_.reset();
+    }
+    void reset(){*this={};}
 };
 
 class VrOverlay {
+    mutable std::mutex mutex_;
     struct Impl;
     std::unique_ptr<Impl> impl_;
 

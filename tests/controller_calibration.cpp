@@ -1,6 +1,7 @@
 #include "alignment.hpp"
 #include "io.hpp"
 #include "tilt.hpp"
+#include "vr_overlay.hpp"
 #include <iostream>
 using namespace kf;
 int main() {
@@ -141,11 +142,50 @@ int main() {
             f.host=102;f.vr.host=100;f.vr.triggerPressed[0]=true;buttons.add(f,42,{});
             check(buttons.cue(102).waitingForReady,"Stale trigger input armed calibration");
             f.vr.host=f.host;buttons.add(f,42,{});
+            check(buttons.cue(102).waitingForReady,"Tracking recovery interpreted held trigger as a new press");
+            f.vr.triggerPressed[0]=false;buttons.add(f,42,{});
+            f.vr.triggerPressed[0]=true;buttons.add(f,42,{});
             check(!buttons.cue(102).waitingForReady && !buttons.cue(102).collecting && buttons.cue(102).seconds==3,"Fresh trigger press did not start settling countdown");
             check(buttons.size()==0,"Trigger motion entered calibration samples");
             f.bodies={waitingBody};f.vr.devices[1]={{-.3,1,2},{},true};f.vr.devices[2]={{.3,1,2},{},true};
             for(int i=0;i<15*30;++i){f.host=f.vr.host=105+i/30.;buttons.add(f,42,{});}
             check(buttons.cue(f.host).step==1 && buttons.cue(f.host).waitingForReady,"Holding trigger across captured pose automatically captured the next pose");
+        }
+        {
+            GuidedAlignment retry;retry.reset(100);Frame f;f.host=f.vr.host=100;
+            f.vr.devices[1].valid=f.vr.devices[2].valid=true;
+            f.vr.triggerAvailable={true,true};f.vr.triggerPressed={true,true};
+            retry.add(f,42,{});
+            for(int attempt=0;attempt<20;++attempt) {
+                // Left trigger stays held; right alone releases and presses.
+                f.host=f.vr.host=101+attempt*30.;f.vr.triggerPressed[1]=false;retry.add(f,42,{});
+                f.host=f.vr.host=f.host+.1;f.vr.triggerPressed[1]=true;retry.add(f,42,{});
+                auto cue=retry.cue(f.host);
+                check(!cue.waitingForReady && !cue.collecting && cue.seconds==3,"Repeated retry did not start preparation with other trigger held");
+                check(retry.cue(f.host+3).collecting,"Preparation did not transition to capture");
+                f.host=f.vr.host=f.host+24;retry.add(f,42,{});
+                check(retry.retrying() && retry.cue(f.host).waitingForReady && retry.stage()==0,"Repeated wrist loss froze or advanced calibration");
+            }
+            f.host=f.vr.host=f.host+1;f.vr.triggerPressed[1]=false;retry.add(f,42,{});
+            f.host=f.vr.host=f.host+.1;f.vr.triggerPressed[1]=true;retry.add(f,42,{});
+            Body recovered;recovered.id=42;
+            recovered.joints[LWrist]={{-.3,1,2},1,.01,1};recovered.joints[RWrist]={{.3,1,2},1,.01,1};
+            f.bodies={recovered};f.vr.devices[1]={{-.3,1,2},{},true};f.vr.devices[2]={{.3,1,2},{},true};
+            for(int i=0;i<300;++i){f.host=f.vr.host=f.host+1./30;retry.add(f,42,{});}
+            check(retry.stage()==1 && retry.cue(f.host).waitingForReady,"Valid capture after twenty failed retries did not recover");
+            OverlayRefresh refresh;OverlayState state;state.active=true;state.isRetry=true;
+            check(refresh.due(state,100),"First overlay frame suppressed");
+            refresh.complete(state,100,true);
+            check(!refresh.due(state,100.5) && refresh.due(state,101.01),"Unchanged overlay did not periodically recover");
+            for(int attempt=0;attempt<20;++attempt) {
+                double t=102+attempt;
+                check(refresh.due(state,t),"Failed identical overlay state suppressed retry");
+                refresh.complete(state,t,false);
+                check(!refresh.due(state,t+.1) && refresh.due(state,t+.26),"Overlay failure retries not bounded");
+            }
+            refresh.complete(state,123,true);state.agreement="new result";
+            check(refresh.due(state,123.11),"Overlay completion text change suppressed");
+            refresh.reset();check(refresh.due(state,123.12),"Hidden overlay did not reset presentation");
         }
         auto oneAxis=samples(2);check(!calibrateControllers(oneAxis,fitted).valid,"Reject single-axis orientation degeneracy");
         auto missing=input;std::erase_if(missing,[](auto &s){return s.device==2;});

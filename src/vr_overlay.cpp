@@ -1,4 +1,6 @@
 #include "vr_overlay.hpp"
+#include "alignment.hpp"
+#include <chrono>
 #include <Windows.h>
 #include <objidl.h>
 #include <gdiplus.h>
@@ -51,22 +53,8 @@ struct VrOverlay::Impl {
     vr::VROverlayHandle_t handle_{vr::k_ulOverlayHandleInvalid};
     std::vector<uint8_t> pixelBuffer_;
     bool visible_{false};
-    double doneTime_{0};
-    int lastStep_{-1};
-    int lastSeconds_{-1};
-    bool lastCollecting_{false};
-    bool lastWaiting_{false};
-    bool lastDone_{false};
-    bool lastSuccess_{false};
-    bool lastIsRetry_{false};
-    std::string lastRetryReason_;
-    std::string lastFeedback_;
-    int lastLeftSamples_{-1};
-    int lastRightSamples_{-1};
-    std::string lastLeftStatus_;
-    std::string lastRightStatus_;
-    bool lastLeftTracked_{false};
-    bool lastRightTracked_{false};
+    bool hidePending_{};
+    OverlayRefresh refresh_;
 
     Impl() {
         Gdiplus::GdiplusStartupInput gdiplusStartupInput;
@@ -87,8 +75,14 @@ struct VrOverlay::Impl {
     }
 
     bool ensureOverlay() {
-        if (!vr::VRSystem() || !vr::VROverlay()) return false;
-        if (handle_ != vr::k_ulOverlayHandleInvalid) return true;
+        if (!vr::VRSystem() || !vr::VROverlay()) {handle_=vr::k_ulOverlayHandleInvalid;visible_=false;return false;}
+        if (handle_ != vr::k_ulOverlayHandleInvalid) {
+            vr::EVROverlayError status=vr::VROverlayError_None;
+            char key[128]{};
+            vr::VROverlay()->GetOverlayKey(handle_,key,sizeof(key),&status);
+            if(status==vr::VROverlayError_None && std::string(key)=="kinect_fbt.calibration_guide")return true;
+            handle_=vr::k_ulOverlayHandleInvalid;visible_=false;
+        }
 
         vr::EVROverlayError err = vr::VROverlay()->FindOverlay("kinect_fbt.calibration_guide", &handle_);
         if (err != vr::EVROverlayError::VROverlayError_None) {
@@ -109,17 +103,17 @@ struct VrOverlay::Impl {
     }
 
     void hide() {
-        if (visible_ && handle_ != vr::k_ulOverlayHandleInvalid && vr::VROverlay()) {
+        if (hidePending_ && handle_ != vr::k_ulOverlayHandleInvalid && vr::VROverlay()) {
             vr::VROverlay()->HideOverlay(handle_);
-            visible_ = false;
-            lastStep_ = -1;
         }
+        visible_=false;hidePending_=false;refresh_.reset();
     }
 
     void render(const OverlayState& state) {
         Gdiplus::Bitmap bitmap(OverlayWidth, OverlayHeight, OverlayWidth * 4,
                                PixelFormat32bppARGB, pixelBuffer_.data());
         Gdiplus::Graphics g(&bitmap);
+        g.Clear(Gdiplus::Color(0,0,0,0));
         g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
         g.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
 
@@ -184,23 +178,18 @@ struct VrOverlay::Impl {
             L"Pose 1: Hands Low (Point Down)",
             L"Pose 2: Hands Forward (Chest Height)",
             L"Pose 3: Hands Apart (Diagonal Out)",
-            L"Pose 4: Hands Up (In Front of Chest)",
+            L"Pose 4: Point Up (Elbows Low)",
             L"Pose 5: Check Pose (Hands Shoulder-Width)"
-        };
-        std::wstring poseDescriptions[5] = {
-            L"Hold both controllers low in front of your waist.\nPoint both controllers straight down towards the floor.\nKeep hands slightly forward away from your body so Kinect sees wrists.",
-            L"Hold controllers forward at chest height.\nPoint both controllers straight forward towards the camera.",
-            L"Hold hands comfortably apart to each side.\nPoint controllers diagonally outward to each side.",
-            L"Hold controllers in front of your chest.\nPoint both controllers straight up towards the ceiling.",
-            L"Hold hands forward at waist-to-chest height, SHOULDER-WIDTH apart.\nKeep wrists clear of your torso so Kinect has an unobstructed view.\nPoint both controllers straight forward."
         };
 
         int step = std::clamp(state.step, 0, 4);
         if (!state.done) {
             g.DrawString(poseTitles[step].c_str(), -1, &titleFont, Gdiplus::PointF(40, 88), &whiteBrush);
-            g.DrawString(poseDescriptions[step].c_str(), -1, &descFont, Gdiplus::RectF(40, 130, 560, 100), nullptr, &grayBrush);
+            const auto text=alignmentPoseInstruction(step);
+            const std::wstring description(text.begin(),text.end());
+            g.DrawString(description.c_str(), -1, &descFont, Gdiplus::RectF(40, 130, 560, 100), nullptr, &grayBrush);
 
-            std::wstring tip = L"Keep your wrists clearly visible to the Kinect sensor. Stand naturally.";
+            std::wstring tip = L"Relax your elbows. Approximate positions are fine.";
             g.DrawString(tip.c_str(), -1, &detailFont, Gdiplus::PointF(40, 245), &mutedBrush);
         } else {
             g.DrawString(L"Alignment Complete!", -1, &titleFont, Gdiplus::PointF(40, 88), &whiteBrush);
@@ -303,7 +292,7 @@ struct VrOverlay::Impl {
             Gdiplus::SolidBrush doneText(Gdiplus::Color(255, 78, 240, 143));
             g.DrawString(L"\u2713 ALIGNMENT SUCCESSFUL", -1, &bannerTitleFont,
                          Gdiplus::RectF(bannerX, bannerY + 45, bannerW, 35), &centerFormat, &doneText);
-            g.DrawString(L"Closing overlay and resuming live tracker output in SteamVR...", -1, &bannerSubFont,
+            g.DrawString(L"Alignment saved. Use the app to enable tracker output when ready.", -1, &bannerSubFont,
                          Gdiplus::RectF(bannerX, bannerY + 90, bannerW, 25), &centerFormat, &grayBrush);
         } else if (state.isRetry && state.waitingForReady) {
             // Dedicated Amber / Coral "TRY AGAIN" Banner
@@ -326,12 +315,12 @@ struct VrOverlay::Impl {
             }
 
             g.DrawString(reasonW.c_str(), -1, &bannerSubFont,
-                         Gdiplus::RectF(bannerX + 30, bannerY + 68, bannerW - 60, 42), &centerFormat, &whiteBrush);
+                         Gdiplus::RectF(bannerX + 30, bannerY + 68, bannerW - 60, 80), &centerFormat, &whiteBrush);
 
             Gdiplus::SolidBrush actionBrush(Gdiplus::Color(255, 255, 215, 90));
             std::wstring actionText = L">> RELEASE & SQUEEZE EITHER TRIGGER TO RETRY <<   \u2022   Earlier poses kept";
             g.DrawString(actionText.c_str(), -1, &diagramFont,
-                         Gdiplus::RectF(bannerX, bannerY + 118, bannerW, 25), &centerFormat, &actionBrush);
+                         Gdiplus::RectF(bannerX, bannerY + 164, bannerW, 25), &centerFormat, &actionBrush);
         } else if (state.waitingForReady) {
             // Waiting for trigger state
             Gdiplus::SolidBrush waitBg(Gdiplus::Color(255, 18, 38, 54));
@@ -387,7 +376,7 @@ struct VrOverlay::Impl {
                 captSub = L"Pause and hold hands completely steady in position.";
             } else if (state.secondsRemaining <= 0 && minSamples < 12) {
                 captTitle = L"KEEP HOLDING STILL \u2014 FINALIZING SAMPLES (" + std::to_wstring(minSamples) + L"/12)";
-                captSub = L"Almost done! Keep controllers steady until step advances automatically.";
+                captSub = L"Waiting for enough steady wrist measurements; the pose may take longer.";
             } else {
                 captTitle = L"HOLD STILL \u2014 CAPTURING WRISTS (" + std::to_wstring(minSamples) + L"/12 samples)";
                 captSub = L"Left: " + std::to_wstring(state.leftSamples) + L"/12 \u2022 Right: " + std::to_wstring(state.rightSamples) + L"/12 steady samples recorded.";
@@ -397,6 +386,14 @@ struct VrOverlay::Impl {
                          Gdiplus::RectF(bannerX, bannerY + 30, bannerW, 35), &centerFormat, &captText);
             g.DrawString(captSub.c_str(), -1, &bannerSubFont,
                          Gdiplus::RectF(bannerX, bannerY + 70, bannerW, 25), &centerFormat, &grayBrush);
+
+            const std::string detail="Left: "+state.leftStatus+" | Right: "+state.rightStatus;
+            const std::wstring detailW(detail.begin(),detail.end());
+            g.DrawString(detailW.c_str(),-1,&bannerSubFont,
+                         Gdiplus::RectF(bannerX+25,bannerY+165,bannerW-50,42),&centerFormat,&grayBrush);
+            const std::wstring timeout=L"If this pose cannot be captured, retry instructions appear in "+std::to_wstring(state.retrySeconds)+L"s.";
+            g.DrawString(timeout.c_str(),-1,&diagramFont,
+                         Gdiplus::RectF(bannerX+25,bannerY+220,bannerW-50,24),&centerFormat,&grayBrush);
 
             // Progress bar
             float barX = bannerX + 60;
@@ -442,53 +439,18 @@ struct VrOverlay::Impl {
             return;
         }
 
-        if (!ensureOverlay()) return;
-
-        bool changed = (!visible_ ||
-                        lastStep_ != state.step ||
-                        lastSeconds_ != state.secondsRemaining ||
-                        lastWaiting_ != state.waitingForReady ||
-                        lastCollecting_ != state.collecting ||
-                        lastDone_ != state.done ||
-                        lastSuccess_ != state.success ||
-                        lastIsRetry_ != state.isRetry ||
-                        lastRetryReason_ != state.retryReason ||
-                        lastFeedback_ != state.feedback ||
-                        lastLeftSamples_ != state.leftSamples ||
-                        lastRightSamples_ != state.rightSamples ||
-                        lastLeftStatus_ != state.leftStatus ||
-                        lastRightStatus_ != state.rightStatus ||
-                        lastLeftTracked_ != state.leftTracked ||
-                        lastRightTracked_ != state.rightTracked);
-
-        if (!changed) return;
-
-        lastStep_ = state.step;
-        lastSeconds_ = state.secondsRemaining;
-        lastWaiting_ = state.waitingForReady;
-        lastCollecting_ = state.collecting;
-        lastDone_ = state.done;
-        lastSuccess_ = state.success;
-        lastIsRetry_ = state.isRetry;
-        lastRetryReason_ = state.retryReason;
-        lastFeedback_ = state.feedback;
-        lastLeftSamples_ = state.leftSamples;
-        lastRightSamples_ = state.rightSamples;
-        lastLeftStatus_ = state.leftStatus;
-        lastRightStatus_ = state.rightStatus;
-        lastLeftTracked_ = state.leftTracked;
-        lastRightTracked_ = state.rightTracked;
-
-        // Render the card into pixelBuffer_
+        const double now=std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        if(!refresh_.due(state,now))return;
+        if(!ensureOverlay()){refresh_.complete(state,now,false);return;}
+        hidePending_=true;
         render(state);
+        auto* overlay=vr::VROverlay();
+        bool success=overlay && overlay->SetOverlayRaw(handle_,pixelBuffer_.data(),OverlayWidth,OverlayHeight,4)==vr::VROverlayError_None;
+        if(success)success=overlay->ShowOverlay(handle_)==vr::VROverlayError_None;
+        refresh_.complete(state,now,success);
+        visible_=success;
+        // Keep the handle for hide/cancel; ensureOverlay revalidates it on retry.
 
-        // Submit raw 32-bit ARGB buffer to OpenVR compositor
-        vr::EVROverlayError err = vr::VROverlay()->SetOverlayRaw(handle_, pixelBuffer_.data(),
-                                                                 OverlayWidth, OverlayHeight, 4);
-        if (err == vr::EVROverlayError::VROverlayError_None) {
-            vr::VROverlay()->ShowOverlay(handle_);
-            visible_ = true;
-        }
     }
 };
 
@@ -496,14 +458,17 @@ VrOverlay::VrOverlay() : impl_(std::make_unique<Impl>()) {}
 VrOverlay::~VrOverlay() = default;
 
 void VrOverlay::update(const OverlayState& state) {
+    std::lock_guard lock(mutex_);
     if (impl_) impl_->update(state);
 }
 
 void VrOverlay::hide() {
+    std::lock_guard lock(mutex_);
     if (impl_) impl_->hide();
 }
 
 bool VrOverlay::isVisible() const {
+    std::lock_guard lock(mutex_);
     return impl_ && impl_->visible_;
 }
 

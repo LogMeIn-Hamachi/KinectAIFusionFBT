@@ -42,6 +42,8 @@ View Engine::view() const {
         copy.calibrationStep=cue.step;
         copy.calibrationSecondsRemaining=cue.seconds;
         copy.calibrationWaiting=cue.waitingForReady;
+        copy.calibrationCapturing=cue.collecting;
+        copy.calibrationRetrySeconds=cue.retrySeconds;
         copy.calibrationPrompt=cue.instruction+"\n"+(cue.waitingForReady?
             "Take your time. Squeeze either trigger or click Capture pose when ready.":cue.collecting?
             (cue.seconds?"Hold still: "+std::to_string(cue.seconds)+" seconds":"Keep holding while both wrists are measured."):
@@ -820,7 +822,8 @@ void Engine::outputLoop() {
                 os.step = s.calibrationStep;
                 os.secondsRemaining = int(s.calibrationSecondsRemaining);
                 os.waitingForReady = s.calibrationWaiting;
-                os.collecting = !s.calibrationWaiting && (os.secondsRemaining <= int(calibrationHoldSeconds));
+                os.collecting = s.calibrationCapturing;
+                os.retrySeconds = s.calibrationRetrySeconds;
                 os.instruction = s.calibrationPrompt;
                 os.feedback = s.calibrationDetail;
                 os.isRetry = s.calibrationRetrying;
@@ -836,7 +839,7 @@ void Engine::outputLoop() {
                     os.rightTrigger = s.frame->vr.triggerPressed[1];
                 }
                 overlay_->update(os);
-            } else if (lastCalibrationActive_ > 0 && nowTime - lastCalibrationActive_ < 3.5 && s.wristOffsetsReady) {
+            } else if (lastCalibrationActive_ > 0 && nowTime - lastCalibrationActive_ < 3.5 && s.calibration.valid) {
                 os.active = true;
                 os.done = true;
                 os.success = true;
