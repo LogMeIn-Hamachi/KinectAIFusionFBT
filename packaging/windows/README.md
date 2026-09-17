@@ -1,4 +1,4 @@
-# KinectAIFusionFBT — v1.0
+# KinectAIFusionFBT — v1.1.0
 
 Full-body tracking for SteamVR using Kinect v1 or v2 and Fast SAM 3D Body. Native Windows x64; NVIDIA GeForce RTX 4000 or 5000 series GPU required (tested on Windows 11 with RTX 5070 Ti). Older RTX 20/30 series lack hardware FP8 and are not supported.
 
@@ -11,7 +11,7 @@ Open **START-HERE.html** for the setup guide. Extract the entire ZIP into a writ
 3. Open **KinectRGBD.exe**, press **Start**, choose your body and **Lock player**. First use prepares a local GPU cache and takes longer than normal startup. SAM optimized is the default. You can stop tracking and choose SAM original in **Advanced** if needed.
 4. Set camera tilt before alignment. Keep wrists and feet visible. Kinect v1 has motor buttons; v2 must be adjusted by hand. A visible head is optional.
 5. Press **Capture proportions**. You have eight seconds to get into place before a four-second capture. Stand naturally with your feet apart.
-6. Reset OVR Advanced Settings space-drag/rotation offsets. Press **Align to VR**. Each pose waits for you: squeeze either controller trigger or click **Capture pose** when ready, then stay still after the three-second countdown. Keep your normal grip and follow the controller-pointing directions. Failed poses can be retried without restarting the earlier poses.
+6. Reset OVR Advanced Settings space-drag/rotation offsets. Press **Align to VR**. Each pose waits for you: squeeze either controller trigger or click **Capture pose** when ready, then stay still after the three-second countdown. Keep your normal grip and follow the hand-position guide: waist, apart, chest, forward reach, then left high/right low. Failed poses can be retried without restarting the earlier poses.
 7. Click **Start trackers**. In SteamVR, use Waist, Left Foot and Right Foot roles; then use VRChat's FBT calibration.
 
 ## Everyday use and playspace movement

@@ -16,7 +16,7 @@ By combining the **Fast SAM 3D Body** deep learning foundation model with high-s
 ## Highlights & Features
 
 - **Adaptive SteamVR Smoothing**: Position and rotation filtering runs with SteamVR updates and adjusts to observed movement. It approaches a fixed target without overshoot; live latency and tracking quality depend on camera rate, visibility and PC load.
-- **In-Headset SteamVR 3D Calibration Overlay**: A real-time visual guide renders directly in your headset during calibration. Clear 3D controller poses, live countdowns, wrist tracking progress counters (`X/12`), and dedicated retry screens guide you through setup without having to take off your headset.
+- **In-Headset SteamVR Calibration Guide**: A real-time visual guide renders directly in your headset during calibration. Body-and-hands diagrams, live countdowns, wrist tracking progress counters (`X/12`), and dedicated retry screens guide you through setup without having to take off your headset.
 - **Fast SAM 3D Body Deep Learning**: Selective FP8 TensorRT backbone and native LibTorch C++ GPU decoder reconstruct full anatomical 3D joints from raw camera video in real time.
 - **High-Priority GPU Stream**: AI inference uses a dedicated high-priority CUDA stream. It still shares the GPU with VRChat.
 - **Adaptive Neural Cadence**: Auto / 30 Hz / 20 Hz / 15 Hz controls the rate of new AI estimates. Depth and foot contacts are processed on every delivered camera frame, including frames that reuse a recent AI estimate.

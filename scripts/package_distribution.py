@@ -10,7 +10,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'release/dev'
 TEMPLATES = ROOT / 'packaging/windows'
-NAME = 'KinectAIFusionFBT-v1.0-Windows-x64'
+NAME = 'KinectAIFusionFBT-v1.1.0-Windows-x64'
 STAGE = ROOT / 'release' / NAME
 ARCHIVE = ROOT / 'release' / (NAME + '.zip')
 REPORT = ROOT / 'artifacts/packaging' / NAME
@@ -93,7 +93,7 @@ def main():
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
         prerequisites = {
-            'schema': 2, 'release': 'v1.0', 'platform': 'Windows x64; tested Windows 11',
+            'schema': 2, 'release': 'v1.1.0', 'platform': 'Windows x64; tested Windows 11',
             'gpu': 'NVIDIA required; tested RTX 5070 Ti; CUDA 12.8 decoder and TensorRT RTX 1.6 encoder',
             'sensor': ['Kinect v2 + powered USB 3 adapter + installed Microsoft Kinect20 runtime',
                        'Kinect v1 + powered adapter + installed Microsoft Kinect SDK 1.8'],
@@ -132,7 +132,7 @@ def main():
             text = path.read_text(encoding='utf-8')
             if any(s in text.lower() for s in ('c:/users/', 'c:\\users/', 'c:\\users\\')):
                 raise RuntimeError('Personal data found in ' + rel)
-    manifest = {'release': 'v1.0', 'scope': 'All distributed files except this manifest; locally generated files are not included', 'files': records}
+    manifest = {'release': 'v1.1.0', 'scope': 'All distributed files except this manifest; locally generated files are not included', 'files': records}
     (STAGE / 'package-sha256.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     print('Integrity/allowlist checks passed; creating full ZIP', flush=True)
     if args.action == 'refresh':
