@@ -170,16 +170,16 @@ void AlignmentSession::writeCsv(std::ostream &out, const Calibration &cal,bool h
     }
 }
 std::string alignmentPoseTitle(int step) {
-    constexpr const char* titles[]{"Relaxed Forward Hold", "Easy Forward Reach", "Open Your Forearms", "Bend Elbows / Raise Forearms", "Check / Lower Forward Reach"};
+    constexpr const char* titles[]{"1. Hands at Waist", "2. Hands Apart", "3. Hands at Chest", "4. Reach Forward", "5. Left High, Right Low"};
     return titles[std::clamp(step,0,calibrationPoseCount-1)];
 }
 std::string alignmentPoseInstruction(int step) {
     constexpr const char* poses[]{
-        "Hold controllers normally, hands just above waist height and shoulder-width apart. Bend elbows, forearms forward, wrists straight. Do not point down.",
-        "Reach a little farther forward at lower chest height. Keep elbows slightly bent and hands shoulder-width apart. Keep the same relaxed grip.",
-        "Open your forearms out a little, like holding two bicycle handles. Keep hands ahead of you, just wider than shoulders. Turn from your elbows, not your wrists.",
-        "Bend your elbows more to raise your forearms, like lifting two mugs. Keep wrists straight, elbows low and hands below shoulders, clear of your chest.",
-        "Check: return to a relaxed forward hold just above your waist. Reach a little farther than pose 1, hands shoulder-width apart. Keep wrists straight."};
+        "Keep elbows by your sides. Hold hands in front of your waist, about shoulder-width apart, with forearms pointing forward.",
+        "Keep elbows near your sides. Swing both forearms out to make a shallow V. Hands stay in front of you, a little wider than your shoulders.",
+        "Bring hands back to shoulder-width apart. Bend elbows to lift both hands in front of your chest. Keep elbows low and leave space from your chest.",
+        "From chest height, reach both hands towards the camera. Stop before your elbows straighten. Keep hands shoulder-width apart.",
+        "Check: hold your LEFT hand in front of your chest and your RIGHT hand in front of your waist. Keep hands apart and both clear of your body."};
     return poses[std::clamp(step,0,calibrationPoseCount-1)];
 }
 AlignmentCue alignmentCue(int step,double elapsed,bool done,bool waiting) {
@@ -277,8 +277,8 @@ void GuidedAlignment::add(const Frame& frame,uint32_t id,const Settings& setting
         candidate_.rawReferenceValid=reference_.rawReferenceValid;
         for(int i=0;i<4;++i)sessions_[i].applyOffsets(offsets_);
         if(!candidate_.valid){
-            stage_=2;sessions_[3].reset(true,true);
-            retry("Need clearer controller directions. Repeat the outward and upward poses; the first two are kept. "+candidate_.reason);return;
+            stage_=1;sessions_[2].reset(true,true);sessions_[3].reset(true,true);
+            retry("Need clearer controller directions. Repeat hands apart, hands at chest and reach forward; the first pose is kept. "+candidate_.reason);return;
         }
         ++stage_;stageStart_=frame.host;captureStart_.reset();triggerReleased_={};return;
     }
@@ -291,7 +291,7 @@ void GuidedAlignment::add(const Frame& frame,uint32_t id,const Settings& setting
             if(error<.12){++close;squared+=error*error;}
         }
         if(!close || double(close)/n<calibrationMinInlierFraction || std::sqrt(squared/close)>calibrationMaxRms) {
-            retry(std::string(d==1?"Left":"Right")+" wrist did not agree in the check. Hold hands just above waist height, shoulder-width apart and forward, pointing towards the camera. Squeeze trigger to retry. Earlier poses are kept.");return;
+            retry(std::string(d==1?"Left":"Right")+" wrist did not agree in the check. Keep your left hand at chest height and right hand at waist height, both in front of you. Squeeze trigger to retry. Earlier poses are kept.");return;
         }
     }
     result_=candidate_;done_=true;

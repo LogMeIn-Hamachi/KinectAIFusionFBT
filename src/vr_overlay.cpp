@@ -237,7 +237,7 @@ struct VrOverlay::Impl {
             const std::wstring description(text.begin(),text.end());
             g.DrawString(description.c_str(), -1, &descFont, Gdiplus::RectF(40, 130, 560, 100), nullptr, &grayBrush);
 
-            std::wstring tip = L"Same grip throughout. Approximate angles and distances are fine.";
+            std::wstring tip = L"Keep your normal grip. Move your arms; keep wrists comfortable.";
             g.DrawString(tip.c_str(), -1, &detailFont, Gdiplus::PointF(40, 245), &mutedBrush);
         } else {
             g.DrawString(L"Alignment Complete!", -1, &titleFont, Gdiplus::PointF(40, 88), &whiteBrush);
@@ -258,68 +258,41 @@ struct VrOverlay::Impl {
         Gdiplus::Pen diagBorder(Gdiplus::Color(255, 30, 45, 60), 1.5f);
         drawRoundedRect(g, diagBorder, diagBg, diagX, diagY, diagW, diagH, 14);
 
-        // Header for diagram
-        Gdiplus::SolidBrush diagHeaderBrush(Gdiplus::Color(255, 130, 155, 175));
-        g.DrawString(L"MOVE FOREARMS, KEEP WRISTS STRAIGHT", -1, &diagramFont, Gdiplus::PointF(diagX + 16, diagY + 12), &diagHeaderBrush);
-
-        // Draw Left & Right controller representations
-        float ctrlLeftX = diagX + 75;
-        float ctrlRightX = diagX + 225;
-        float ctrlCenterY = diagY + 110;
-
-        // Controller grips (capsules)
-        Gdiplus::SolidBrush gripBrush(Gdiplus::Color(255, 45, 60, 78));
-        Gdiplus::Pen gripBorder(Gdiplus::Color(255, 80, 105, 130), 2.0f);
-        drawRoundedRect(g, gripBorder, gripBrush, ctrlLeftX - 22, ctrlCenterY - 32, 44, 64, 10);
-        drawRoundedRect(g, gripBorder, gripBrush, ctrlRightX - 22, ctrlCenterY - 32, 44, 64, 10);
-
-        // Controller labels & sample count
-        std::wstring leftLabel = L"LEFT\n" + std::to_wstring(std::clamp(state.leftSamples, 0, 12)) + L"/12";
-        std::wstring rightLabel = L"RIGHT\n" + std::to_wstring(std::clamp(state.rightSamples, 0, 12)) + L"/12";
-        g.DrawString(leftLabel.c_str(), -1, &diagramFont, Gdiplus::RectF(ctrlLeftX - 35, ctrlCenterY + 36, 70, 32), &centerFormat, &diagHeaderBrush);
-        g.DrawString(rightLabel.c_str(), -1, &diagramFont, Gdiplus::RectF(ctrlRightX - 35, ctrlCenterY + 36, 70, 32), &centerFormat, &diagHeaderBrush);
-
-        // Controller tracking dots (Kinect sight + VR connection)
-        bool leftOccluded = (state.leftStatus == "Kinect cannot see wrist");
-        bool rightOccluded = (state.rightStatus == "Kinect cannot see wrist");
-
-        Gdiplus::SolidBrush trackedDot(Gdiplus::Color(255, 78, 240, 143));
-        Gdiplus::SolidBrush occludedDot(Gdiplus::Color(255, 255, 195, 60));
-        Gdiplus::SolidBrush untrackedDot(Gdiplus::Color(255, 240, 78, 78));
-
-        auto getDot = [&](bool tracked, bool occluded) -> Gdiplus::Brush* {
-            if (!tracked) return &untrackedDot;
-            if (occluded) return &occludedDot;
-            return &trackedDot;
+        // Hand-position guide, drawn from the user's perspective (left is left).
+        Gdiplus::SolidBrush diagHeaderBrush(Gdiplus::Color(255,130,155,175));
+        g.DrawString(L"YOUR LEFT                 YOUR RIGHT",-1,&diagramFont,
+                     Gdiplus::PointF(diagX+25,diagY+12),&diagHeaderBrush);
+        const float cx=diagX+170, shoulderY=diagY+64, waistY=diagY+157;
+        Gdiplus::Pen bodyPen(Gdiplus::Color(255,82,102,122),3.f);
+        Gdiplus::Pen armPen(Gdiplus::Color(255,83,217,255),4.f);
+        g.DrawEllipse(&bodyPen,cx-15,diagY+28,30.f,27.f);
+        g.DrawLine(&bodyPen,cx-39,shoulderY,cx+39,shoulderY);
+        g.DrawLine(&bodyPen,cx-39,shoulderY,cx-28,waistY);
+        g.DrawLine(&bodyPen,cx+39,shoulderY,cx+28,waistY);
+        g.DrawLine(&bodyPen,cx-28,waistY,cx+28,waistY);
+        const float spread=step==1?112.f:76.f;
+        const float leftY=diagY+(step==0||step==1?139.f:88.f);
+        const float rightY=step==4?diagY+139:leftY;
+        auto arm=[&](float side,float handY) {
+            const float elbowX=cx+side*51,elbowY=diagY+119,handX=cx+side*spread;
+            g.DrawLine(&armPen,cx+side*39,shoulderY,elbowX,elbowY);
+            g.DrawLine(&armPen,elbowX,elbowY,handX,handY);
+            g.FillEllipse(&tealBrush,handX-9,handY-9,18.f,18.f);
         };
-
-        g.FillEllipse(getDot(state.leftTracked, leftOccluded), ctrlLeftX - 5.0f, ctrlCenterY - 26.0f, 10.0f, 10.0f);
-        g.FillEllipse(getDot(state.rightTracked, rightOccluded), ctrlRightX - 5.0f, ctrlCenterY - 26.0f, 10.0f, 10.0f);
-
-        // Directional arrows for current pose
-        Gdiplus::Pen arrowPen(Gdiplus::Color(255, 83, 217, 255), 4.5f);
-        Gdiplus::SolidBrush arrowBrush(Gdiplus::Color(255, 83, 217, 255));
-        Gdiplus::SolidBrush arrowTextBrush(Gdiplus::Color(255, 83, 217, 255));
-
-        std::wstring arrowLabels[5] = { L"RELAXED FORWARD HOLD", L"EASY FORWARD REACH", L"OPEN FOREARMS SLIGHTLY", L"RAISE FOREARMS / WRISTS STRAIGHT", L"RELAXED FORWARD CHECK" };
-        g.DrawString(arrowLabels[step].c_str(), -1, &diagramFont, Gdiplus::RectF(diagX, diagY + 185, diagW, 20), &centerFormat, &arrowTextBrush);
-
-        if (step == 0 || step == 1 || step == 4) {
-            // Point Forward (represented as 3D perspective / upward-forward ring)
-            drawArrow(g, arrowPen, arrowBrush, ctrlLeftX, ctrlCenterY + 12.0f, ctrlLeftX, ctrlCenterY - 26.0f, 12.0f);
-            drawArrow(g, arrowPen, arrowBrush, ctrlRightX, ctrlCenterY + 12.0f, ctrlRightX, ctrlCenterY - 26.0f, 12.0f);
-            Gdiplus::Pen ringPen(Gdiplus::Color(255, 83, 217, 255), 2.5f);
-            g.DrawEllipse(&ringPen, ctrlLeftX - 12.0f, ctrlCenterY - 22.0f, 24.0f, 14.0f);
-            g.DrawEllipse(&ringPen, ctrlRightX - 12.0f, ctrlCenterY - 22.0f, 24.0f, 14.0f);
-        } else if (step == 2) {
-            // Point Diagonally Outward
-            drawArrow(g, arrowPen, arrowBrush, ctrlLeftX + 5.0f, ctrlCenterY + 5.0f, ctrlLeftX - 25.0f, ctrlCenterY - 22.0f, 12.0f);
-            drawArrow(g, arrowPen, arrowBrush, ctrlRightX - 5.0f, ctrlCenterY + 5.0f, ctrlRightX + 25.0f, ctrlCenterY - 22.0f, 12.0f);
-        } else if (step == 3) {
-            // Point Straight Up
-            drawArrow(g, arrowPen, arrowBrush, ctrlLeftX, ctrlCenterY + 16.0f, ctrlLeftX, ctrlCenterY - 28.0f, 12.0f);
-            drawArrow(g, arrowPen, arrowBrush, ctrlRightX, ctrlCenterY + 16.0f, ctrlRightX, ctrlCenterY - 28.0f, 12.0f);
+        arm(-1,leftY);arm(1,rightY);
+        if(step==3) {
+            // Forward reach cannot be represented by height alone.
+            Gdiplus::SolidBrush arrowBrush(Gdiplus::Color(255,83,217,255));
+            drawArrow(g,armPen,arrowBrush,cx-76,leftY,cx-91,leftY-22,8);
+            drawArrow(g,armPen,arrowBrush,cx+76,rightY,cx+91,rightY-22,8);
         }
+        const wchar_t* hints[]{L"FOREARMS FORWARD",L"SHALLOW V / HANDS STILL FORWARD",
+            L"ELBOWS LOW / HANDS OFF CHEST",L"REACH TOWARDS THE CAMERA",L"LEFT AT CHEST / RIGHT AT WAIST"};
+        g.DrawString(hints[step],-1,&diagramFont,Gdiplus::RectF(diagX,diagY+180,diagW,24),&centerFormat,&diagHeaderBrush);
+        bool leftOccluded=(state.leftStatus=="Kinect cannot see wrist");
+        bool rightOccluded=(state.rightStatus=="Kinect cannot see wrist");
+        std::wstring counts=L"Left "+std::to_wstring(std::min(state.leftSamples,12))+L"/12    Right "+std::to_wstring(std::min(state.rightSamples,12))+L"/12";
+        g.DrawString(counts.c_str(),-1,&diagramFont,Gdiplus::RectF(diagX,diagY+158,diagW,21),&centerFormat,&diagHeaderBrush);
 
         // 5. Bottom Status / Progress Banner
         float bannerX = 36;

@@ -81,11 +81,11 @@ If you replace files in the already registered folder, SteamVR loads those files
 - Reset any OVR Advanced Settings space drag offsets before aligning.
 - Put your headset on, grab both controllers, and click **Align to VR** (or press the button in the desktop UI).
 - An interactive guide will appear floating in front of you inside SteamVR:
-  - **Pose 1 — Relaxed forward hold**: Hold controllers normally just above waist height, shoulder-width apart, with elbows bent and wrists straight. No downward pointing.
-  - **Pose 2 — Easy forward reach**: Reach a little farther forward at lower chest height, keeping elbows slightly bent and the same relaxed grip.
-  - **Pose 3 — Open your forearms**: Open forearms slightly like holding two bicycle handles, hands still ahead of you and just outside shoulder width. Turn from the elbows instead of bending wrists sideways.
-  - **Pose 4 — Raise your forearms**: Bend elbows more, like lifting two mugs. Keep wrists straight, elbows low and hands below shoulders and clear of the chest. The controllers naturally turn upward with your forearms.
-  - **Pose 5 — Independent check**: Return to the relaxed forward hold just above waist height, a little farther forward than pose 1, hands shoulder-width apart.
+  - **Pose 1 — Hands at waist**: Elbows by your sides, hands forward at waist height and shoulder-width apart.
+  - **Pose 2 — Hands apart**: Keep elbows near your sides and swing forearms outward into a shallow V. Hands remain forward, just wider than your shoulders.
+  - **Pose 3 — Hands at chest**: Return to shoulder width and bend elbows to bring hands in front of your chest, leaving space from your body.
+  - **Pose 4 — Reach forward**: From chest height, reach towards the camera, stopping before your elbows straighten.
+  - **Pose 5 — Left high, right low**: Left hand in front of your chest, right hand in front of your waist. Keep both hands apart and clear of your body. This independently checks the alignment.
   - Keep the same normal grip throughout. Approximate positions and angles are fine; keep wrists clear of your torso. Each pose waits for your trigger press, then gives three seconds to settle before capture. The fifth pose checks the fit independently; pressing the trigger does not bypass validation.
   - *If a pose needs adjustment, an amber retry screen will explain what to adjust—simply squeeze your trigger to try that step again without restarting.*
 
