@@ -18,6 +18,51 @@ PosePrior sample(double time,bool depth=true) {
     p.imageRoot=v[Hip];return p;
 }
 int main(){try {
+    // Every layout preserves the original three outputs exactly; optional
+    // joints consume the same SAM estimate without influencing its fit.
+    for(int extras=0;extras<8;++extras) {
+        BodyTracker body;Estimator baseline,expanded;baseline.select(7);expanded.select(7);
+        expanded.settings.extraTrackers=extras;
+        Calibration cal;State expected,actual;double baseMs=0,extraMs=0;
+        for(int n=0;n<60;++n) {
+            Frame f;f.host=10+n/30.;auto prior=sample(f.host);
+            // Disagreeing SDK limbs must not replace the optional SAM pose.
+            Body sdk;sdk.id=7;sdk.player=1;
+            for(int j=0;j<J;++j)sdk.joints[j]={prior.points[j],.9,.02,1};
+            sdk.joints[LElbow].p.x-=.2;f.bodies={sdk};
+            auto fitted=body.update(prior,7,f,cal,baseline.settings);
+            expected=baseline.process(f,nullptr,cal,&fitted);
+            actual=expanded.process(f,nullptr,cal,&fitted);
+            if(n>=10){baseMs+=expected.fitMs;extraMs+=actual.fitMs;}
+            for(int i=0;i<3;++i) {
+                check(norm(expected.trackers[i].p-actual.trackers[i].p)<1e-12,"Extra trackers changed base positions");
+                check(angleBetween(expected.trackers[i].q,actual.trackers[i].q)<1e-6,"Extra trackers changed base rotations");
+                check(norm(expected.trackers[i].velocity-actual.trackers[i].velocity)<1e-12,"Extra trackers changed base prediction");
+                check(expected.trackers[i].valid==actual.trackers[i].valid,"Extra trackers changed base validity");
+            }
+        }
+        if(extras==7)std::cout<<"Estimator CPU fit: base "<<baseMs/50<<" ms, all trackers "<<extraMs/50<<" ms (synthetic, excludes inference)\n";
+        check(actual.trackerMask==trackerMask(extras),"Incorrect tracker layout mask");
+        for(int i=3;i<trackerCount;++i) {
+            check(actual.trackers[i].valid==trackerEnabled(actual.trackerMask,i),"Optional tracker selection or validity wrong");
+            if(actual.trackers[i].valid) {
+                check(finite(actual.trackers[i].p) && std::abs(dot(actual.trackers[i].q,actual.trackers[i].q)-1)<1e-9,"Invalid optional tracker geometry");
+                check(actual.learnedPosition[i] && actual.learnedDirection[i],"Optional tracker fell back to SDK");
+                if(i<7)check(norm(actual.trackers[i].p-actual.body.joints[i<5?LKnee+i-3:LElbow+i-5].p)<1e-9,"Optional tracker attached to wrong joint");
+            }
+        }
+        auto expired=deliveryState(actual,actual.host+.3);
+        for(const auto& t:expired.trackers)check(!t.valid,"Optional tracker did not expire");
+        Frame f;f.host=12.1;auto prior=sample(f.host);prior.available[LElbow]=false;
+        Body sdk;sdk.id=7;for(int j=0;j<J;++j)sdk.joints[j]={prior.points[j],.9,.02,1};f.bodies={sdk};
+        auto fitted=body.update(prior,7,f,cal,expanded.settings);
+        auto missing=expanded.process(f,nullptr,cal,&fitted);
+        check(!missing.trackers[5].valid,"Missing SAM elbow replaced with SDK pose");
+        expanded.settings.extraTrackers=0;f.host+=.04;
+        auto disabled=expanded.process(f,nullptr,cal);
+        for(int i=3;i<trackerCount;++i)check(!disabled.trackers[i].valid,"Deselected tracker stayed active");
+    }
+
     // Smooth constant-speed input through the real body/estimator/output path.
     // Detect stop-go presentation even when average position accuracy is good.
     for(double fps:{15.,30.})for(double speed:{.03,.06,.2}) {

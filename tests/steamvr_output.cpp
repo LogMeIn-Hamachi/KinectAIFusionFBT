@@ -25,13 +25,33 @@ int main(){try {
         missing.enabled=0;
         check(!bridgeTrackingStatus(missing,0,10.25).connected,"Stopped output remained connected");
     }
+    for(int extras=0;extras<8;++extras) {
+        State all=s;all.trackerMask=trackerMask(extras);
+        for(int i=0;i<trackerCount;++i) {all.trackers[i]=t;all.trackers[i].p.x+=i*.1;}
+        auto packet=trackerPacket(all,cal,vr,10.02,true);OscTracking osc;
+        auto output=osc.update(all,cal,vr,10.02);auto bytes=oscBundle(output,{});
+        std::string wire(bytes.begin(),bytes.end());
+        for(int i=0;i<trackerCount;++i) {
+            bool enabled=trackerEnabled(all.trackerMask,i);
+            check(bridgeTrackingStatus(packet,i,10.02).connected==enabled,"Native optional connection mask wrong");
+            check(bridgeTrackingStatus(packet,i,10.02).valid==enabled && output[i].valid==enabled,"Output layout mismatch");
+            check((wire.find("/tracking/trackers/"+std::to_string(i+1)+"/position")!=std::string::npos)==enabled,"OSC renumbered or leaked optional tracker");
+            if(enabled) {
+                auto missing=packet;missing.poses[i].valid=0;
+                check(bridgeTrackingStatus(missing,i,10.02).connected && !bridgeTrackingStatus(missing,i,10.02).valid,"Optional observation loss disconnected device");
+            }
+        }
+        all.trackerMask=baseTrackerMask;
+        auto disabled=osc.update(all,cal,vr,10.03);
+        for(int i=3;i<trackerCount;++i)check(!disabled[i].valid,"OSC retained deselected tracker");
+    }
     auto expected=vr.standingToRaw.apply(cal.transform.apply(t.p+t.velocity*.02));
     auto& v=p.poses[0];check(norm(V3{v.position[0],v.position[1],v.position[2]}-expected)<1e-9,"Standing/raw conversion or reflection incorrect");
     Q q{v.rotation[0],v.rotation[1],v.rotation[2],v.rotation[3]};
     check(std::abs(dot(q,vr.standingToRaw.q*cal.transform.q*t.q))>.999999,"SteamVR rotation convention mismatch");
     {
-        State all=s;
-        for(int i=0;i<3;++i){all.trackers[i]=t;all.trackers[i].p={.2*(i-1),i?0.04:1.1,2};}
+        State all=s;all.trackerMask=allTrackerMask;
+        for(int i=0;i<trackerCount;++i){all.trackers[i]=t;all.trackers[i].p={.2*(i-1),i?0.04:1.1,2};}
         const auto physical=trackerPacket(all,cal,vr,10.02,true);
         // OVR applies a standing-space translation/rotation to real devices.
         // Virtual trackers must receive exactly the same movement, once.
@@ -39,7 +59,7 @@ int main(){try {
             auto shifted=vr;shifted.standingToRaw=composeRigid(vr.standingToRaw,inverseRigid(drag));
             auto packet=trackerPacket(all,cal,shifted,10.02,true);
             check(validPacket(packet,10.02),"Playspace move disabled tracking");
-            for(int i=0;i<3;++i) {
+            for(int i=0;i<trackerCount;++i) {
                 const auto& a=physical.poses[i];const auto& b=packet.poses[i];
                 V3 rawA{a.position[0],a.position[1],a.position[2]},rawB{b.position[0],b.position[1],b.position[2]};
                 check(norm(rawA-rawB)<1e-9,"Virtual playspace move leaked into physical tracker coordinates");
@@ -142,13 +162,13 @@ int main(){try {
     auto oscVr=vr;oscVr.rawTransformValid=true;
     for(double cameraHz:{15.,30.}) {
         OscTracking osc;
-        std::array<TrackerSmoothing,3> native;
-        State moving=s;moving.body.id=42;
+        std::array<TrackerSmoothing,trackerCount> native;
+        State moving=s;moving.body.id=42;moving.trackerMask=allTrackerMask;
         for(int tick=0;tick<375;++tick) {
             double time=20+tick/125.;
             double sample=20+std::floor((time-20)*cameraHz+1e-7)/cameraHz;
             moving.host=moving.lastObserved=sample;
-            for(int i=0;i<3;++i) {
+            for(int i=0;i<trackerCount;++i) {
                 auto& tracker=moving.trackers[i];tracker.valid=true;tracker.observedHost=sample;
                 tracker.p={.15*(sample-20)+i*.2,i?0.05:1.0,2};
                 tracker.velocity={.15,0,0};tracker.q=axisAngle({0,1,0},.4*(sample-20));
@@ -160,7 +180,7 @@ int main(){try {
             space.devices[0].q=axisAngle({1,0,0},std::sin(time)); // gaze cannot move trackers
             auto packet=trackerPacket(moving,cal,space,time,true);
             auto output=osc.update(moving,cal,space,time);
-            for(int i=0;i<3;++i) {
+            for(int i=0;i<trackerCount;++i) {
                 const auto& pose=packet.poses[i];
                 native[i].update({pose.position[0],pose.position[1],pose.position[2]},
                     {pose.rotation[0],pose.rotation[1],pose.rotation[2],pose.rotation[3]},

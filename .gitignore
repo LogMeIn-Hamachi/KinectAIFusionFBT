@@ -43,6 +43,7 @@
 **/calibration*.txt
 **/tracking-model.txt
 **/tracking-output.txt
+**/tracking-extras.txt
 **/decoder-precision.txt
 **/kinect-v2-exposure.txt
 **/.env

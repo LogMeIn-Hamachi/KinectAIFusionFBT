@@ -439,17 +439,26 @@ struct Tracker {
     bool valid{};
     double observedHost{}; // per-tracker freshness, not serialized.
 };
+// Stable wire order: retain the original waist/feet IDs in every layout.
+inline constexpr int trackerCount=8;
+inline constexpr uint32_t baseTrackerMask=7, allTrackerMask=255;
+inline constexpr const char* trackerNames[]{"Hips","Left foot","Right foot","Left knee","Right knee","Left elbow","Right elbow","Chest"};
+inline constexpr uint32_t trackerMask(int extras) {
+    return baseTrackerMask | ((extras&1)?24u:0u) | ((extras&2)?96u:0u) | ((extras&4)?128u:0u);
+}
+inline constexpr bool trackerEnabled(uint32_t mask,int role) {return role>=0 && role<trackerCount && (mask&(1u<<role));}
 enum class Mode { Lost, RawSdk, FilteredSdk, Fused, Predicted, Degraded };
 struct State {
     Body body;
     std::array<DepthSupport, J> depthSupport{};
-    std::array<Tracker, 3> trackers;
+    std::array<Tracker, trackerCount> trackers;
+    uint32_t trackerMask{baseTrackerMask};
     std::array<FootContact, 2> contacts;
     Mode mode{Mode::Lost};
     double host{}, lastObserved{}, fitMs{};
     bool ambiguous{};
-    std::array<bool,3> learnedDirection{};
-    std::array<bool,3> learnedPosition{};
+    std::array<bool,trackerCount> learnedDirection{};
+    std::array<bool,trackerCount> learnedPosition{};
     std::array<bool,2> nativeFootDirection{};
 };
 // The body root is registered to selected-person depth. Articulated joint
@@ -482,6 +491,7 @@ struct PosePrior {
 struct Settings {
     bool inference{true}, depth{true}, constraints{true}, contacts{true}, vrConstraints{true};
     int baseline{};
+    int extraTrackers{}; // Output preference: bit 0 knees, bit 1 elbows, bit 2 chest.
     double soleOffset{0.075}, surfaceRadius{0.045};
     std::array<V3, 3> deviceOffsets{{{0, -0.10, 0.08}, {0, 0, 0}, {0, 0, 0}}};
     // Hip offset is from pelvis; feet are mounted above the estimated sole,
@@ -613,14 +623,14 @@ class Estimator {
     bool smoothSourceChanges_{true};
     State state_;
     std::array<V3, J> velocity_{};
-    std::array<PresentationVelocity,3> presentationVelocity_{};
+    std::array<PresentationVelocity,trackerCount> presentationVelocity_{};
     std::array<double, J> seen_{};
     std::array<double, bones.size()> lengths_{};
     std::uint32_t selected_{};
     unsigned initialized_{};
-    std::array<RotationEvidence, 3> rotations_{};
-    std::array<V3, 3> angularVelocity_{};
-    std::array<Q, 3> previousRotation_{};
+    std::array<RotationEvidence, trackerCount> rotations_{};
+    std::array<V3, trackerCount> angularVelocity_{};
+    std::array<Q, trackerCount> previousRotation_{};
     std::array<LearnedPositionFilter,J> learnedFilters_{};
     std::array<SourceTransition,J> sourceTransitions_{};
     std::array<SoleCorrection,2> soleCorrections_{};
@@ -648,7 +658,7 @@ class Estimator {
         lengths_ = values;
     }
 };
-std::vector<std::uint8_t> oscBundle(const std::array<Tracker, 3> &trackers, const Rigid &cameraToVr);
+std::vector<std::uint8_t> oscBundle(std::span<const Tracker> trackers, const Rigid &cameraToVr);
 std::string modeName(Mode mode);
 std::string sha256(const std::filesystem::path &path);
 } // namespace kf

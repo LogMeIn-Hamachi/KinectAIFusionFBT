@@ -3,7 +3,7 @@
 namespace kf {
 struct TrackingStats {
     uint64_t inferences{}, reusedFrames{}, inferenceErrors{}, missingPriorFrames{};
-    std::array<uint64_t,3> validityLosses{}, sourceChanges{};
+    std::array<uint64_t,trackerCount> validityLosses{}, sourceChanges{};
     double neuralHz{}, neuralAgeMs{}, workerMs{};
     double lastInferenceCompletion{};
     void age(double time) {
@@ -15,7 +15,7 @@ class TrackingHealth {
     TrackingStats stats_;
     std::deque<double> inferenceTimes_;
     double lastInference_{};
-    std::array<bool,3> valid_{}, learned_{};
+    std::array<bool,trackerCount> valid_{}, learned_{};
 public:
     void resetSource() {valid_={};learned_={};}
     void inferred(double time) {
@@ -24,7 +24,7 @@ public:
     }
     void frame(bool reused,bool failed,bool missing,const State& state) {
         stats_.reusedFrames+=reused;stats_.inferenceErrors+=failed;stats_.missingPriorFrames+=missing;
-        for(int i=0;i<3;++i) {
+        for(int i=0;i<trackerCount;++i) {
             bool valid=state.trackers[i].valid;
             if(valid_[i] && !valid)++stats_.validityLosses[i];
             if(valid_[i] && valid && learned_[i]!=state.learnedPosition[i])++stats_.sourceChanges[i];

@@ -1,4 +1,4 @@
-# KinectAIFusionFBT — v1.1.0
+# KinectAIFusionFBT — v1.2.0
 
 Full-body tracking for SteamVR using Kinect v1 or v2 and Fast SAM 3D Body. Native Windows x64; NVIDIA GeForce RTX 4000 or 5000 series GPU required (tested on Windows 11 with RTX 5070 Ti). Older RTX 20/30 series lack hardware FP8 and are not supported.
 
@@ -20,7 +20,13 @@ If the camera and physical room setup have not changed: start SteamVR, reset OVR
 
 After confirming or aligning, OVR space drag and rotation should move waist and feet along with your headset/controllers. The app keeps a stable physical-room reference for tracking, while SteamVR applies virtual playspace movement. Reset OVR offsets again before confirming a saved alignment after restarting the app. If SteamVR restarts while the app is tracking, repeat Align to VR. This requirement avoids interpreting an active virtual offset as the original calibrated room.
 
-Preview 23 changes coordinate conversion, not the SAM model, smoothing, depth anchoring or foot-contact thresholds. Ten automated test suites passed, including simulated drag/rotation/reset and the full body-to-tracker pipeline at 15, 22 and 30 Hz. The 301-frame saved replay retained the same tracking output. Live OVR/VRChat confirmation remains necessary; these tests do not measure real-world accuracy.
+## Choose extra trackers
+
+Hips and feet are always included. Beside Confirm saved alignment, tick **Add: Knees**, **Elbows**, or **Chest** in any combination. Knees and elbows each add both sides. Leave all unchecked for the default three trackers. Pause tracker output before changing these choices, then start output and recalibrate FBT inside VRChat. The selection is remembered. SteamVR and OSC both support the extras, using the existing AI estimate without another inference.
+
+Extra joint positions and rotations are estimates; visibility and occlusion affect quality. Existing hips/feet tracking and smoothing are retained.
+
+**Known saved-alignment issue:** after Quest tracking resumes, Confirm saved alignment can accept a transform that places trackers incorrectly. This release does not fix that issue. If trackers are displaced, use a fresh Align to VR before VRChat FBT calibration.
 
 ## What is included
 

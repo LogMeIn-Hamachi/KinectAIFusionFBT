@@ -3,8 +3,8 @@
 #include <openvr_driver.h>
 #include <cstdio>
 namespace {
-constexpr const char* serials[]{"KinectFBT_Waist","KinectFBT_LeftFoot","KinectFBT_RightFoot"};
-constexpr const char* roles[]{"TrackerRole_Waist","TrackerRole_LeftFoot","TrackerRole_RightFoot"};
+constexpr const char* serials[]{"KinectFBT_Waist","KinectFBT_LeftFoot","KinectFBT_RightFoot","KinectFBT_LeftKnee","KinectFBT_RightKnee","KinectFBT_LeftElbow","KinectFBT_RightElbow","KinectFBT_Chest"};
+constexpr const char* roles[]{"TrackerRole_Waist","TrackerRole_LeftFoot","TrackerRole_RightFoot","TrackerRole_LeftKnee","TrackerRole_RightKnee","TrackerRole_LeftElbow","TrackerRole_RightElbow","TrackerRole_Chest"};
 class Device final:public vr::ITrackedDeviceServerDriver {
     std::atomic<vr::TrackedDeviceIndex_t> index_{vr::k_unTrackedDeviceIndexInvalid};
     vr::DriverPose_t pose_{};
@@ -74,7 +74,7 @@ public:
 };
 class Provider final:public vr::IServerTrackedDeviceProvider {
     std::unique_ptr<kf::SteamVrBridge> bridge_;
-    std::array<std::unique_ptr<Device>,3> devices_;
+    std::array<std::unique_ptr<Device>,kf::trackerCount> devices_;
     kf::BridgePacket packet_;
 public:
     vr::EVRInitError Init(vr::IVRDriverContext* context)override {
@@ -93,7 +93,19 @@ public:
         for(auto& d:devices_)d.reset();bridge_.reset();VR_CLEANUP_SERVER_DRIVER_CONTEXT();
     }
     const char*const* GetInterfaceVersions()override{return vr::k_InterfaceVersions;}
-    void RunFrame()override{if(!bridge_)return;bridge_->read(packet_);double time=kf::now();for(auto& d:devices_)if(d)d->update(packet_,time);}
+    void RunFrame()override {
+        if(!bridge_)return;bridge_->read(packet_);double time=kf::now();
+        // Register optional devices only when requested. OpenVR cannot remove a
+        // registered device mid-session; deselection disconnects it instead.
+        if(kf::validPacket(packet_,time))for(int i=3;i<kf::trackerCount;++i) {
+            if(!devices_[i] && kf::trackerEnabled(packet_.trackerMask,i)) {
+                auto device=std::make_unique<Device>(i);
+                if(vr::VRServerDriverHost()->TrackedDeviceAdded(serials[i],vr::TrackedDeviceClass_GenericTracker,device.get()))
+                    devices_[i]=std::move(device);
+            }
+        }
+        for(auto& d:devices_)if(d)d->update(packet_,time);
+    }
     bool ShouldBlockStandbyMode()override{return false;}
     void EnterStandby()override{}
     void LeaveStandby()override{}

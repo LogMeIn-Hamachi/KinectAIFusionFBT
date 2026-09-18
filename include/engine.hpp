@@ -23,7 +23,7 @@ struct View {
     std::string sensor = "Stopped", inference = "Not loaded", vr = "SteamVR not connected",
                 notice = "Start the sensor or open a local recording.";
     TrackingStats health;
-    std::array<uint64_t,3> outputValidityLosses{};
+    std::array<uint64_t,trackerCount> outputValidityLosses{};
     double inferenceMs{}, queueMs{}, arrivalToEstimateMs{};
     std::uint64_t frames{}, sent{}, sendErrors{}, dropped{}, recordDrops{};
     bool running{}, recording{}, replay{}, output{}, collecting{};
@@ -95,6 +95,7 @@ class Engine {
     void useSavedCalibration();
     void bodyCalibration();
     void settings(Settings);
+    void chooseTrackers(int extras);
     void chooseModel(int);
     void chooseCadence(int);
     void chooseExposure(bool prefer30);

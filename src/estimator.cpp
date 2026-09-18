@@ -246,6 +246,10 @@ State Estimator::process(const Frame &f, const Keypoints *rgb, const Calibration
     double dt = state_.host > 0 ? std::clamp(f.host - state_.host, 0.001, 0.15) : 1.0 / 30;
     if (state_.host > 0 && f.host <= state_.host)
         return state_;
+    state_.trackerMask=trackerMask(settings.extraTrackers);
+    for(int i=3;i<trackerCount;++i)if(!trackerEnabled(state_.trackerMask,i)) {
+        state_.trackers[i]={};rotations_[i]={};presentationVelocity_[i]={};previousRotation_[i]={};angularVelocity_[i]={};
+    }
     const auto previousLearnedPosition=state_.learnedPosition;
     state_.learnedDirection={};
     state_.learnedPosition={};
@@ -562,12 +566,55 @@ State Estimator::process(const Frame &f, const Keypoints *rgb, const Calibration
             }else {plants_[side]={};t.p+=f.floor.n*soleCorrections_[side].update(target,dt);}
         } else {soleCorrections_[side]={};plants_[side]={};}
     }
-    for (int i = 0; i < 3; ++i) {
+    // Optional outputs read the already filtered skeleton; they never feed back
+    // into articulation, root anchoring, calibration, or the existing feet.
+    const auto observed=[&](int j) {
+        return learned && learned->available[j] && b[j].source==5 &&
+               b[j].confidence>.2 && finite(b[j].p) && f.host-seen_[j]<=outputHoldSeconds;
+    };
+    const bool torsoObserved=observed(LShoulder) && observed(RShoulder) && observed(Hip) && observed(Neck);
+    const V3 torsoRight=b[RShoulder].p-b[LShoulder].p,torsoUp=b[Neck].p-b[Hip].p;
+    const bool torsoValid=torsoObserved && norm(torsoRight)>.12 && norm(torsoUp)>.15 &&
+        norm(cross(unit(torsoRight),unit(torsoUp)))>.4;
+    const Q torso=torsoValid?basis(torsoRight,torsoUp):Q{};
+    for(int i=3;i<trackerCount;++i) {
+        auto& t=state_.trackers[i];
+        if(!trackerEnabled(state_.trackerMask,i))continue;
+        bool visible=torsoValid;
+        Q orientation=torso;V3 position{};double observedHost=f.host,sigma=0;
+        if(i==7) {
+            position=lerp(b[Hip].p,b[Neck].p,.65);
+            for(int j:{Hip,Neck,LShoulder,RShoulder}) {observedHost=std::min(observedHost,seen_[j]);sigma=std::max(sigma,b[j].sigma);}
+        } else {
+            const int joint=i<5?LKnee+i-3:LElbow+i-5;
+            const int parent=i<5?LHip+i-3:LShoulder+i-5;
+            visible=visible && observed(joint) && observed(parent);
+            position=b[joint].p;observedHost=std::min(seen_[joint],seen_[parent]);sigma=b[joint].sigma;
+            const V3 segment=b[parent].p-b[joint].p;
+            visible=visible && norm(segment)>.08 && norm(segment)<.8;
+            if(visible) {
+                // Swing the torso frame onto the upper limb. Unlike a bend-plane
+                // cross product this remains defined when a knee/elbow is straight.
+                const V3 from=torso.rotate({0,1,0}),to=unit(segment);
+                const double cosine=std::clamp(dot(from,to),-1.,1.);
+                // Near the antipodal singularity the axial twist is unobservable.
+                // Mark it unavailable instead of snapping the frame by 180 degrees.
+                visible=cosine>-.98;
+                if(visible) {auto axis=cross(from,to);orientation=normalized(Q{1+cosine,axis.x,axis.y,axis.z})*torso;}
+            }
+        }
+        const bool accepted=rotations_[i].update(orientation,visible,f.host,.10,.8,8,.045,true);
+        t.valid=visible && accepted;t.observedHost=observedHost;
+        t.p=position;t.q=continuous(rotations_[i].value,t.q);
+        t.positionSigma=sigma;t.angularSigma=accepted?V3{.5,.65,.5}:V3{pi,pi,pi};
+        state_.learnedPosition[i]=t.valid;state_.learnedDirection[i]=t.valid;
+    }
+    for (int i = 0; i < trackerCount; ++i) {
         auto &t = state_.trackers[i];
         if(state_.learnedPosition[i]!=previousLearnedPosition[i])presentationVelocity_[i]={};
         auto motion=presentationVelocity_[i].update(t.p,f.host,t.valid);
-        if(settings.baseline==0 && learned && learned->bodyFitted) {
-            t.velocity=(i>0 && plants_[i-1].planted)?V3{}:motion;
+        if(i>=3 || (settings.baseline==0 && learned && learned->bodyFitted)) {
+            t.velocity=(i>0 && i<3 && plants_[i-1].planted)?V3{}:motion;
         }
         if (t.valid && previous.host > 0 && dt > 0.005 && std::isfinite(dot(previousRotation_[i], previousRotation_[i])) && dot(previousRotation_[i], previousRotation_[i]) > 0.5) {
             Q delta = continuous(t.q, previousRotation_[i]) * previousRotation_[i].conjugate();
@@ -623,7 +670,7 @@ static void oscVec(std::vector<std::uint8_t> &b, const std::string &address, V3 
     u32(b, static_cast<std::uint32_t>(m.size()));
     b.insert(b.end(), m.begin(), m.end());
 }
-std::vector<std::uint8_t> oscBundle(const std::array<Tracker, 3> &t, const Rigid &transform) {
+std::vector<std::uint8_t> oscBundle(std::span<const Tracker> t, const Rigid &transform) {
     if (!finite(transform.t) || !std::isfinite(dot(transform.q, transform.q)) ||
         std::abs(dot(transform.q, transform.q) - 1) > .001)
         return {};
@@ -641,7 +688,7 @@ std::vector<std::uint8_t> oscBundle(const std::array<Tracker, 3> &t, const Rigid
     oscString(b, "#bundle");
     u32(b, 0);
     u32(b, 1);
-    for (int i = 0; i < 3; ++i) {
+    for (size_t i = 0; i < std::min(t.size(),size_t(trackerCount)); ++i) {
         if (!t[i].valid)
             continue;
         V3 p = reflectZ(transform.apply(t[i].p));

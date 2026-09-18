@@ -1,25 +1,31 @@
-# KinectAIFusionFBT v1.1.0
+# KinectAIFusionFBT v1.2.0 — Optional trackers
 
-## Changes since v1.0.1
+## Changes since v1.1.0
 
-- Improved automatic neural cadence recovery and tracker continuity during brief tracking loss.
-- More continuous slow tracker movement between camera observations.
-- OSC now shares prediction and smoothing with native SteamVR output as closely as its protocol allows.
-- Saved alignment survives temporary tracking loss and cancelled calibration attempts, while genuine origin changes still require realignment.
-- Five self-paced calibration poses with a body-and-hands headset guide, clearer preparation/capture timing and retry feedback.
-- Headset overlay uses a persistent GPU texture, corrected GPU submission ordering and VR-session recovery. Diagnostics include overlay errors.
-- Added Update SteamVR Trackers.cmd to switch an existing installation to the new bundled driver.
+- Add optional left/right knee, left/right elbow and chest trackers to SteamVR or OSC.
+- Hips and feet remain the default. Simple **Add: Knees / Elbows / Chest** checkboxes let you choose any combination, up to eight trackers.
+- Replaced the confusing layout dropdown and removed the selection-reset behavior that could interfere with choosing an item.
+- Extra trackers reuse the existing learned body pose; no additional AI inference. They share output smoothing, freshness checks and playspace conversion.
+- Original hips/feet tracking and calibration algorithms remain unchanged.
 
-## Installation and updating
+## Updating an existing installation
 
-New users: download all three Windows-x64.zip parts into one folder, then open .001 with 7-Zip and extract the complete application.
+1. Close the app and SteamVR completely.
+2. Download **KinectAIFusionFBT-v1.2.0-AppUpdate.zip** and extract its contents into your existing v1.1.0 application folder, replacing included files. Your models, calibration and preferences are retained.
+3. Run **Update SteamVR Trackers.cmd**, then restart SteamVR and the app.
 
-Existing v1.0.0/v1.0.1 users: close the app and SteamVR, extract AppUpdate.zip into the existing application folder and replace the included files. Models, calibration and preferences are retained. Run Update SteamVR Trackers.cmd from that folder, then start SteamVR and the app.
+**Update the app, driver and tracker profile together.** This release uses a new tracker connection format; mixing old and new components will not work.
 
-The full package includes both SAM model variants and native runtimes. NVIDIA and Microsoft Kinect drivers and SteamVR remain external prerequisites.
+To add trackers, pause output, tick the desired checkboxes beside Confirm saved alignment, start output, then recalibrate FBT **inside VRChat**. Knees and elbows are pairs. A layout change does not require redoing the app's camera alignment unless that alignment is already wrong.
 
-## Validation and limitations
+## New installations
 
-All ten offline CTest suites pass; the updater also has offline fixture tests. Packages are assembled from an explicit allowlist and verified against SHA-256 hashes. Camera recordings, calibration, preferences, diagnostics and GPU caches are excluded.
+Download all three **KinectAIFusionFBT-v1.2.0-Windows-x64.zip.001 / .002 / .003** parts into one folder. Open `.001` with 7-Zip and extract the complete application. These are archive parts, not separate installers. The full package includes SAM original/optimized models and native runtimes. NVIDIA/Kinect drivers and SteamVR are external prerequisites. SHA-256 checksums are included.
 
-Recent overlay recovery and the revised poses have offline coverage but still need broader live headset validation. Single-camera occlusion, side-on and lying poses remain difficult. This release does not claim those limitations are solved.
+## Validation and known limitations
+
+All ten offline test suites pass, including all tracker combinations, unchanged base outputs, missing-pose handling, and SteamVR/OSC smoothing and playspace parity. The user confirmed additional trackers work. Their live accuracy depends on visibility; torso/limb twist is inferred. Single-camera occlusion, sideways and lying poses remain difficult. The final checkbox UI still needs broader interactive validation.
+
+**Saved alignment after Quest tracking recovery remains unresolved.** Confirm saved alignment can accept an alignment that leaves trackers displaced after headset tracking resumes. Use a fresh **Align to VR** when this occurs. This release does not attempt to fix it.
+
+Packages are assembled from an explicit allowlist and verified by SHA-256 and ZIP CRC. No personal recordings, screenshots, calibration, preferences, diagnostics or GPU caches are included.

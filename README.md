@@ -22,7 +22,7 @@ By combining the **Fast SAM 3D Body** deep learning foundation model with high-s
 - **Adaptive Neural Cadence**: Auto / 30 Hz / 20 Hz / 15 Hz controls the rate of new AI estimates. Depth and foot contacts are processed on every delivered camera frame, including frames that reuse a recent AI estimate.
 - **Full Metric Depth & Ground-Plane Locking**: Automatically detects room floor tilt and locks soles to the floor to prevent floating or floor clipping.
 - **Playspace Move & Space Drag Support**: Seamlessly moves with OVR Advanced Settings playspace drag and rotation without losing calibration.
-- **Saved Alignment Memory**: Calibrate once and click **Confirm saved alignment** in future sessions to jump straight in.
+- **Saved Alignment Memory**: Reuse an alignment when the camera and tracking origin still match. Known issue: Quest tracking recovery can leave saved alignment displaced; run a fresh **Align to VR** if trackers are offset.
 
 ---
 
@@ -47,7 +47,7 @@ By combining the **Fast SAM 3D Body** deep learning foundation model with high-s
 3. Ensure **SteamVR** is installed and has been run at least once.
 
 ### 2. Installation
-1. Download the latest **`KinectFBT-v1.0-Windows-x64.zip`** from [Releases](https://github.com/LogMeIn-Hamachi/KinectAIFusionFBT/releases).
+1. Download all three **`KinectAIFusionFBT-v1.2.0-Windows-x64.zip`** parts from [Releases](https://github.com/LogMeIn-Hamachi/KinectAIFusionFBT/releases). Open `.zip.001` with 7-Zip to extract the complete folder. Existing users can use the smaller **AppUpdate.zip** instead; close the app and SteamVR before replacing files.
 2. Extract the ZIP into a permanent folder on your PC (e.g. `C:\Tools\KinectAIFusionFBT`).
 3. Make sure SteamVR is closed, then right-click **`Install SteamVR Trackers.cmd`** and select **Run as administrator** (or double-click it). This registers the virtual tracker driver with SteamVR.
 
@@ -58,6 +58,16 @@ By combining the **Fast SAM 3D Body** deep learning foundation model with high-s
 Close SteamVR completely, extract the new package to its permanent location, and double-click **Update SteamVR Trackers.cmd** in that package. It switches registration from an older Kinect package to the new bundled driver, leaving old files, settings and unrelated drivers untouched. Start SteamVR afterward. Keep the new folder in place.
 
 If you replace files in the already registered folder, SteamVR loads those files on its next start; the updater confirms that the folder is already registered. It does not download releases or copy preferences between packages. A failed registration update attempts to restore the previous Kinect registration.
+
+## Optional Knee, Elbow and Chest Trackers
+
+Hips and feet are always included (three trackers by default). Use the **Add: Knees / Elbows / Chest** checkboxes beside **Confirm saved alignment** to enable any extras you want, for up to eight trackers. Knees and elbows each add a left/right pair. Leave all three unchecked for the default. Your selection is remembered locally.
+
+Stop tracker output before changing the selection, then start trackers and recalibrate full-body tracking **inside VRChat** so it binds the added or removed trackers. Changing this selection does not invalidate the app's camera-to-VR alignment. Both SteamVR and OSC support the same choices; the preview lists the selected trackers and their tracking status.
+
+Extra trackers use the existing learned body pose without another AI inference. They require a usable learned pose and do not switch to SDK limbs when that pose is unavailable. Chest direction comes from the torso; knee and elbow direction is inferred from the upper limb and torso, so axial twist and occluded poses remain approximate. Extra trackers are optional because unreliable estimates can constrain the avatar poorly.
+
+This release requires its matching app, SteamVR driver and tracker profile. Restart SteamVR after updating them. Optional SteamVR devices appear when first enabled; deselected devices disconnect and may remain listed until SteamVR restarts. No extra devices are registered in a fresh default three-tracker session.
 
 ## Step-by-Step Calibration Guide
 
@@ -103,7 +113,7 @@ If you replace files in the already registered folder, SteamVR loads those files
 - **Saved Alignment**: As long as your Kinect has not been moved physically, you do **not** need to re-align every time!
   - Start SteamVR $\to$ Launch `KinectRGBD.exe` $\to$ Click **Start** $\to$ **Lock player** $\to$ **Confirm saved alignment** $\to$ **Start trackers**.
 - **Brief headset removal**: If SteamVR retains the same tracking reference and the camera stays fixed, use **Confirm saved alignment** if confirmation is needed. Temporary unavailability asks you to wake SteamVR and retry. A genuine SteamVR restart or physical tracking-origin change during a running session requires a new alignment.
-- **Playspace Movement**: Moving your playspace with OVR Advanced Settings space drag works automatically—all three trackers stay physically anchored to your real-world body.
+- **Playspace Movement**: Moving your playspace with OVR Advanced Settings space drag applies consistently to all selected trackers.
 
 ---
 

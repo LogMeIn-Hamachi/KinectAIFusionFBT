@@ -5,14 +5,14 @@ namespace kf {
 // Match the native driver's physical-space prediction/filtering, then apply
 // the live playspace transform. Never smooth virtual space drag as body motion.
 class OscTracking {
-    std::array<TrackerSmoothing,3> filters_;
+    std::array<TrackerSmoothing,trackerCount> filters_;
     Rigid reference_{};
     uint32_t body_{};
     uint64_t epoch_{};
     bool initialized_{}, bound_{};
 public:
     void reset() { *this=OscTracking{}; }
-    std::array<Tracker,3> update(const State& state,const Calibration& calibration,
+    std::array<Tracker,trackerCount> update(const State& state,const Calibration& calibration,
                               const VrSample& vr,double time) {
         auto cal=calibration;auto space=vr;
         // Retain legacy OSC-only alignment support without inventing a live
@@ -30,9 +30,9 @@ public:
             reset();initialized_=true;reference_=reference;body_=state.body.id;
             epoch_=cal.rawEpoch;bound_=calibration.rawReferenceValid;
         }
-        std::array<Tracker,3> result{};
+        std::array<Tracker,trackerCount> result{};
         const auto rawToStanding=inverseRigid(space.standingToRaw);
-        for(int i=0;i<3;++i) {
+        for(int i=0;i<trackerCount;++i) {
             if(!bridgeTrackingStatus(packet,i,time).valid){filters_[i].reset();continue;}
             const auto& p=packet.poses[i];
             filters_[i].update({p.position[0],p.position[1],p.position[2]},

@@ -7,7 +7,12 @@
   "tracker_types": {
     "TrackerRole_Waist": "{htc}/input/tracker/vive_tracker_waist_profile.json",
     "TrackerRole_LeftFoot": "{htc}/input/tracker/vive_tracker_left_foot_profile.json",
-    "TrackerRole_RightFoot": "{htc}/input/tracker/vive_tracker_right_foot_profile.json"
+    "TrackerRole_RightFoot": "{htc}/input/tracker/vive_tracker_right_foot_profile.json",
+    "TrackerRole_LeftKnee": "{htc}/input/tracker/vive_tracker_left_knee_profile.json",
+    "TrackerRole_RightKnee": "{htc}/input/tracker/vive_tracker_right_knee_profile.json",
+    "TrackerRole_LeftElbow": "{htc}/input/tracker/vive_tracker_left_elbow_profile.json",
+    "TrackerRole_RightElbow": "{htc}/input/tracker/vive_tracker_right_elbow_profile.json",
+    "TrackerRole_Chest": "{htc}/input/tracker/vive_tracker_chest_profile.json"
   },
   "input_source": {
     "/pose/raw": {

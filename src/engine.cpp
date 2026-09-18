@@ -19,6 +19,8 @@ Engine::Engine(std::filesystem::path root) : root_(std::move(root)) {
     if(modelFile>>name){if(name=="nlf")view_.modelChoice=1;else if(name=="sam")view_.modelChoice=0;else if(name=="sam-fp8")view_.modelChoice=2;else if(name=="sam-optimized")view_.modelChoice=3;}
     std::ifstream outputFile(root_/"tracking-output.txt");std::string outputName;
     if(outputFile>>outputName)view_.steamVrOutput=outputName!="osc";
+    std::ifstream trackerFile(root_/"tracking-extras.txt");int extras=0;
+    if(trackerFile>>extras && extras>=0 && extras<=7)view_.settings.extraTrackers=extras;
     calibrationFile_=root_/"calibration.txt";
     std::ifstream cadenceFile(root_/"tracking-cadence.txt");int savedCadence=0;
     if(cadenceFile>>savedCadence && savedCadence>=0 && savedCadence<=3) {
@@ -36,6 +38,8 @@ View Engine::view() const {
     std::lock_guard l(mutex_);
     auto copy = view_;
     copy.health.age(now());
+    copy.state.trackerMask=trackerMask(copy.settings.extraTrackers);
+    for(int i=3;i<trackerCount;++i)if(!trackerEnabled(copy.state.trackerMask,i))copy.state.trackers[i].valid=false;
     copy.tiltWait=std::max(0.,tiltLimiter_.nextAllowed-now());
     if(copy.collecting) {
         auto cue=alignment_.cue(now());
@@ -65,7 +69,7 @@ View Engine::view() const {
     if(copy.running && !copy.replay && copy.state.host>0) {
         auto delivered=deliveryState(copy.state,now());
         copy.state.mode=delivered.mode;
-        for(int i=0;i<3;++i)copy.state.trackers[i].valid=delivered.trackers[i].valid;
+        for(int i=0;i<trackerCount;++i)copy.state.trackers[i].valid=delivered.trackers[i].valid;
     }
     return copy;
 }
@@ -140,6 +144,14 @@ void Engine::settings(Settings s) {
             view_.notice = "Device offsets changed; collect a new camera-to-VR alignment.";
         }
     view_.settings = s;
+}
+void Engine::chooseTrackers(int extras) {
+    std::lock_guard l(mutex_);
+    if(view_.output || extras<0 || extras>7)return;
+    std::ofstream file(root_/"tracking-extras.txt",std::ios::trunc);file<<extras<<'\n';file.flush();
+    if(!file){view_.notice="Could not save tracker selection.";return;}
+    view_.settings.extraTrackers=extras;
+    view_.notice="Tracker selection saved. Start trackers, then recalibrate full-body tracking in VRChat. Extra trackers need SAM body visibility.";
 }
 void Engine::chooseModel(int choice) {
     std::lock_guard l(mutex_);
@@ -500,7 +512,11 @@ void Engine::processLoop() {
                     message("Replay comparison with "+poseName+"; recorded geometry and settings retained. OSC is disabled.");
                     samReplayNotice=true;
                 }
+                // Output layout is a local preference, not part of the historical
+                // recording format. Replay remains output-disabled.
+                const int extras=config.settings.extraTrackers;
                 config.settings = frame->runConfig->settings;
+                config.settings.extraTrackers=extras;
                 // Preserve user-selected ablations while restoring all recorded geometric parameters.
                 config.settings.baseline = view().settings.baseline;
                 config.calibration = frame->runConfig->calibration;
@@ -759,7 +775,7 @@ void Engine::outputLoop() {
     OscOutput osc;SteamVrBridge bridge;
     OscTracking oscTracking;
     HANDLE writer=CreateMutexW(nullptr,FALSE,L"Local\\KinectFBT_Writer_v1");bool claimed=false;
-    std::array<bool,3> previousOutputValid{};
+    std::array<bool,trackerCount> previousOutputValid{};
     while(run_) {
         auto s=view();bool wants=s.output && s.calibration.valid && !s.replay;
         std::string status;
@@ -776,12 +792,12 @@ void Engine::outputLoop() {
                 else {
                     int validCount=0;
                     std::lock_guard l(mutex_);
-                    for(int i=0;i<3;++i) {
+                    for(int i=0;i<trackerCount;++i) {
                         bool valid=bridgeTrackingStatus(packet,i,packet.published).valid;
                         if(previousOutputValid[i] && !valid)++view_.outputValidityLosses[i];
                         previousOutputValid[i]=valid;validCount+=valid;
                     }
-                    status="SteamVR output: "+std::to_string(validCount)+"/3 trackers valid";
+                    status="SteamVR output: "+std::to_string(validCount)+"/"+std::to_string(std::popcount(trackerMask(s.settings.extraTrackers)))+" trackers valid";
                 }
             }else status="Another tracker app is using SteamVR output";
         }else {
@@ -790,18 +806,18 @@ void Engine::outputLoop() {
                 const bool referenceReady=!s.calibration.rawReferenceValid ||
                     (s.frame && trackingReferenceValid(s.calibration,s.frame->vr));
                 auto trackers=referenceReady?oscTracking.update(s.state,s.calibration,
-                    s.frame?s.frame->vr:VrSample{},now()):std::array<Tracker,3>{};
+                    s.frame?s.frame->vr:VrSample{},now()):std::array<Tracker,trackerCount>{};
                 if(!referenceReady)oscTracking.reset();
                 auto bytes=oscBundle(trackers,{});
                 int validCount=0;
                 {std::lock_guard l(mutex_);
-                    for(int i=0;i<3;++i) {
+                    for(int i=0;i<trackerCount;++i) {
                         if(previousOutputValid[i] && !trackers[i].valid)++view_.outputValidityLosses[i];
                         previousOutputValid[i]=trackers[i].valid;validCount+=trackers[i].valid;
                     }
                 }
                 status=!referenceReady?"OSC waiting for the SteamVR coordinate origin":
-                    "OSC output: "+std::to_string(validCount)+"/3 trackers valid";
+                    "OSC output: "+std::to_string(validCount)+"/"+std::to_string(std::popcount(trackerMask(s.settings.extraTrackers)))+" trackers valid";
                 if(!bytes.empty()) {
                     bool ok=osc.send(bytes);std::lock_guard l(mutex_);
                     if(ok)++view_.sent;else ++view_.sendErrors;
@@ -925,7 +941,7 @@ void Engine::exportDiagnostics() {
       << "\ncalibration_rms_limit_m=" << calibrationMaxRms
       << "\ncalibration_min_consistent_fraction=" << calibrationMinInlierFraction
       << "\nNOTE: latest samples, not percentile latency; no motion-to-photon claim.\n";
-    for(int i=0;i<3;++i)f<<"\ntracker_"<<i<<"_validity_losses="<<s.health.validityLosses[i]
+    for(int i=0;i<trackerCount;++i)f<<"\ntracker_"<<i<<"_validity_losses="<<s.health.validityLosses[i]
         <<"\ntracker_"<<i<<"_source_changes="<<s.health.sourceChanges[i]
         <<"\ntracker_"<<i<<"_output_validity_losses="<<s.outputValidityLosses[i];
     if(s.frame)f<<"\nsensor_version="<<s.frame->sensorVersion<<"\ncolor_dimensions="<<s.frame->width<<'x'<<s.frame->height
@@ -944,13 +960,14 @@ void Engine::exportDiagnostics() {
         auto offset=s.settings.deviceOffsets[d];
         f<<"device_"<<d<<"_offset_m="<<offset.x<<','<<offset.y<<','<<offset.z<<'\n';
     }
+    f << "extra_trackers=" << s.settings.extraTrackers << "\n";
     f << "locked_body_id=" << selection_ << "\nestimated_body_id=" << s.state.body.id
       << "\norientation_ambiguous=" << s.state.ambiguous << "\nvisible_body_ids=";
     if (s.frame)
         for (const auto &body : s.frame->bodies)
             f << body.id << ' ';
     f << '\n';
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < trackerCount; ++i) {
         const auto &tracker = s.state.trackers[i];
         f << "tracker_" << i + 1 << "_valid=" << tracker.valid << "\ntracker_" << i + 1
           << "_position_m=" << tracker.p.x << ',' << tracker.p.y << ',' << tracker.p.z << "\ntracker_"

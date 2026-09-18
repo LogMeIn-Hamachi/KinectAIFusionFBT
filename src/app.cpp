@@ -49,6 +49,9 @@ enum {
     TiltDown,
     TiltUp,
     SteamVrToggle,
+    KneesToggle = 150,
+    ElbowsToggle,
+    ChestToggle,
     SaveOffsets = 130,
     OffsetBase = 140
 };
@@ -231,17 +234,21 @@ void paint() {
     box(dc, {24, 704, 664, 824}, RGB(24, 34, 44));
     text(dc, 40, 715, 606, 96, wide(s.notice), RGB(207, 227, 237));
     // A segment-attached tracker schematic accompanies the camera overlays; it is not a synthetic pose feed.
-    int tx = 1020, ty = 222;
-    for (int i = 0; i < 3; ++i) {
+    int tx = 1020, ty = 222, row=0;
+    const bool compact=s.settings.extraTrackers!=0;
+    for (int i = 0; i < trackerCount; ++i) {
+        if(!trackerEnabled(trackerMask(s.settings.extraTrackers),i))continue;
+        const int y=ty+row++*(compact?27:72);
         auto t = s.state.trackers[i];
         auto brush = CreateSolidBrush(!t.valid                ? RGB(82, 95, 108)
                                       : t.angularSigma.y >= 1 ? RGB(236, 181, 75)
                                       : s.state.learnedDirection[i] ? RGB(113,172,243)
                                                               : RGB(72, 216, 181));
         auto ob = SelectObject(dc, brush);
-        Ellipse(dc, tx, ty + i * 72, tx + 18, ty + 18 + i * 72);
+        Ellipse(dc, tx, y, tx + 18, y + 18);
         SelectObject(dc, ob);
         DeleteObject(brush);
+        if(compact) {text(dc,tx+26,y-3,150,25,wide(trackerNames[i]),RGB(173,193,209),smallFont);continue;}
         std::wostringstream tr;
         tr << (i == 0   ? L"Hips"
                : i == 1 ? L"Left foot"
@@ -395,6 +402,12 @@ LRESULT CALLBACK procedure(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
             control(L"BUTTON", L"Capture proportions", BodyCal, 312, 140, 184, 30);
             control(L"BUTTON", L"Align to VR", Align, 504, 140, 126, 30);
             control(L"BUTTON", L"Confirm saved alignment", Saved, 638, 140, 210, 30);
+            control(L"STATIC",L"Add:",149,864,146,40,24);
+            control(L"BUTTON",L"Knees",KneesToggle,905,140,88,30,BS_AUTOCHECKBOX);
+            control(L"BUTTON",L"Elbows",ElbowsToggle,997,140,94,30,BS_AUTOCHECKBOX);
+            control(L"BUTTON",L"Chest",ChestToggle,1095,140,88,30,BS_AUTOCHECKBOX);
+            for(int i=0;i<3;++i)SendDlgItemMessageW(window,KneesToggle+i,BM_SETCHECK,
+                (engine->view().settings.extraTrackers&(1<<i))?BST_CHECKED:BST_UNCHECKED,0);
             modeBox = control(WC_COMBOBOXW, L"", ModeSelect, 385, 598,400,180,CBS_DROPDOWNLIST);
             for (auto name : {L"RGB-D fusion (experimental)", L"Raw SDK baseline", L"Filtered SDK baseline"})
                 SendMessageW(modeBox, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name));
@@ -448,6 +461,12 @@ LRESULT CALLBACK procedure(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
             }
             wasBodyCollecting=s.bodyCollecting;
             enableIfChanged(GetDlgItem(window,SteamVrToggle),!s.output);
+            for(int i=0;i<3;++i) {
+                auto h=GetDlgItem(window,KneesToggle+i);
+                enableIfChanged(h,!s.output && !s.collecting && !s.bodyCollecting);
+                const auto checked=(s.settings.extraTrackers&(1<<i))?BST_CHECKED:BST_UNCHECKED;
+                if(SendMessageW(h,BM_GETCHECK,0,0)!=checked)SendMessageW(h,BM_SETCHECK,checked,0);
+            }
             enableIfChanged(GetDlgItem(window,BodyCal),s.running && !s.collecting && !s.bodyCollecting);
             labelIfChanged(GetDlgItem(window,Saved),s.collecting?L"Capture pose":L"Confirm saved alignment");
             enableIfChanged(GetDlgItem(window,Saved),!s.bodyCollecting && (!s.collecting || s.calibrationWaiting));
@@ -502,6 +521,14 @@ LRESULT CALLBACK procedure(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
             if (HIWORD(wp) != BN_CLICKED)
                 return 0;
             switch (id) {
+            case KneesToggle:
+            case ElbowsToggle:
+            case ChestToggle: {
+                int extras=0;
+                for(int i=0;i<3;++i)if(SendDlgItemMessageW(window,KneesToggle+i,BM_GETCHECK,0,0)==BST_CHECKED)extras|=1<<i;
+                engine->chooseTrackers(extras);
+                break;
+            }
             case Start:
                 engine->start();
                 break;
@@ -646,7 +673,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     RECT r{0, 0, 1224, 850};
     AdjustWindowRect(&r, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, FALSE);
     auto window =
-        CreateWindowW(wc.lpszClassName, L"Kinect RGB-D — Experimental full-body tracking (preview 23)",
+        CreateWindowW(wc.lpszClassName, L"Kinect RGB-D — Experimental full-body tracking (v1.2.0)",
                       WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
                       r.right - r.left, r.bottom - r.top, nullptr, nullptr, instance, nullptr);
     if (!window)

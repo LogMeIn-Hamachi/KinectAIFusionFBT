@@ -3,19 +3,20 @@
 #include <Windows.h>
 #include <cstring>
 namespace kf {
-inline constexpr uint32_t bridgeMagic=0x4b465442,bridgeVersion=2;
+inline constexpr uint32_t bridgeMagic=0x4b465442,bridgeVersion=3;
 struct BridgePose {
     double position[3]{},rotation[4]{1,0,0,0},velocity[3]{},angularVelocity[3]{},validUntil{};
     uint32_t valid{};
 };
 struct BridgePacket {
     uint32_t magic{bridgeMagic},version{bridgeVersion},bytes{sizeof(BridgePacket)},enabled{};
+    uint32_t trackerMask{baseTrackerMask};
     double published{};
-    std::array<BridgePose,3> poses{};
+    std::array<BridgePose,trackerCount> poses{};
 };
 struct BridgeMemory {BridgePacket packet;double driverHeartbeat{};uint32_t driverReady{};};
 inline bool validPacket(const BridgePacket& p,double time) {
-    if(p.magic!=bridgeMagic || p.version!=bridgeVersion || p.bytes!=sizeof(p) || !p.enabled ||
+    if(p.magic!=bridgeMagic || p.version!=bridgeVersion || p.bytes!=sizeof(p) || !p.enabled || (p.trackerMask & ~allTrackerMask) ||
        !std::isfinite(p.published) || p.published>time+.01 || time-p.published>.25)return false;
     for(auto& v:p.poses)if(v.valid) {
         V3 position{v.position[0],v.position[1],v.position[2]},velocity{v.velocity[0],v.velocity[1],v.velocity[2]};
@@ -29,7 +30,7 @@ inline bool validPacket(const BridgePacket& p,double time) {
 }
 struct BridgeTrackingStatus {bool connected{},valid{};};
 inline BridgeTrackingStatus bridgeTrackingStatus(const BridgePacket& packet,int role,double time) {
-    if(role<0 || role>=3 || !validPacket(packet,time))return {};
+    if(role<0 || role>=trackerCount || !validPacket(packet,time) || !trackerEnabled(packet.trackerMask,role))return {};
     const auto& pose=packet.poses[role];
     // A live device with a temporarily unobserved foot is still connected.
     // Tracking validity must expire, without hot-unplugging the virtual device.
@@ -38,11 +39,11 @@ inline BridgeTrackingStatus bridgeTrackingStatus(const BridgePacket& packet,int 
 inline BridgePacket trackerPacket(const State& state,const Calibration& cal,const VrSample& vr,double time,bool enabled) {
     BridgePacket packet;packet.published=time;
     if(!enabled || !cal.valid || !trackingReferenceValid(cal,vr))return packet;
-    auto delivery=deliveryState(state,time);packet.enabled=1;
+    auto delivery=deliveryState(state,time);packet.enabled=1;packet.trackerMask=state.trackerMask;
     const auto cameraToRaw=composeRigid(cal.standingToRaw,cal.transform);
     const double age=std::max(0.0,time-state.host);
     const double extraDt=std::clamp(age-.04,0.0,0.06);
-    for(int i=0;i<3;++i) {
+    for(int i=0;i<trackerCount;++i) {
         auto t=delivery.trackers[i];auto& out=packet.poses[i];
         if(t.valid && extraDt>0)t.p+=bounded(t.velocity,4)*extraDt;
         // SteamVR is right-handed. The OSC/Unity Z reflection does not belong here.
@@ -58,7 +59,7 @@ inline BridgePacket trackerPacket(const State& state,const Calibration& cal,cons
         out.velocity[0]=v.x;out.velocity[1]=v.y;out.velocity[2]=v.z;
         out.angularVelocity[0]=w.x;out.angularVelocity[1]=w.y;out.angularVelocity[2]=w.z;
         out.validUntil=(t.observedHost>0?t.observedHost:state.lastObserved)+outputHoldSeconds;
-        out.valid=t.valid;
+        out.valid=t.valid && trackerEnabled(packet.trackerMask,i);
     }
     return packet;
 }
@@ -69,8 +70,8 @@ class SteamVrBridge {
     BridgeMemory* memory_{};
 public:
     explicit SteamVrBridge(bool testOnly=false) {
-        mutex_=CreateMutexW(nullptr,FALSE,testOnly?L"Local\\KinectFBT_TestMutex_v2":L"Local\\KinectFBT_PoseMutex_v2");
-        mapping_=CreateFileMappingW(INVALID_HANDLE_VALUE,nullptr,PAGE_READWRITE,0,sizeof(BridgeMemory),testOnly?L"Local\\KinectFBT_TestPoses_v2":L"Local\\KinectFBT_Poses_v2");
+        mutex_=CreateMutexW(nullptr,FALSE,testOnly?L"Local\\KinectFBT_TestMutex_v3":L"Local\\KinectFBT_PoseMutex_v3");
+        mapping_=CreateFileMappingW(INVALID_HANDLE_VALUE,nullptr,PAGE_READWRITE,0,sizeof(BridgeMemory),testOnly?L"Local\\KinectFBT_TestPoses_v3":L"Local\\KinectFBT_Poses_v3");
         if(mapping_)memory_=static_cast<BridgeMemory*>(MapViewOfFile(mapping_,FILE_MAP_ALL_ACCESS,0,0,sizeof(BridgeMemory)));
     }
     ~SteamVrBridge(){if(memory_)UnmapViewOfFile(memory_);if(mapping_)CloseHandle(mapping_);if(mutex_)CloseHandle(mutex_);}
