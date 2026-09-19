@@ -1,4 +1,5 @@
 #include "engine.hpp"
+#include "build_version.hpp"
 #include "sam3d_model.hpp"
 #include "nlf_model.hpp"
 #include "body_tracker.hpp"
@@ -37,6 +38,11 @@ Engine::~Engine() {
 View Engine::view() const {
     std::lock_guard l(mutex_);
     auto copy = view_;
+    if(copy.replay && copy.frame && copy.frame->runConfig) {
+        const auto extras=copy.settings.extraTrackers,baseline=copy.settings.baseline;
+        copy.settings=copy.frame->runConfig->settings;
+        copy.settings.extraTrackers=extras;copy.settings.baseline=baseline;
+    }
     copy.health.age(now());
     copy.state.trackerMask=trackerMask(copy.settings.extraTrackers);
     for(int i=3;i<trackerCount;++i)if(!trackerEnabled(copy.state.trackerMask,i))copy.state.trackers[i].valid=false;
@@ -45,12 +51,13 @@ View Engine::view() const {
         auto cue=alignment_.cue(now());
         copy.calibrationStep=cue.step;
         copy.calibrationSecondsRemaining=cue.seconds;
+        copy.calibrationProgress=cue.progressPercent;
         copy.calibrationWaiting=cue.waitingForReady;
         copy.calibrationCapturing=cue.collecting;
         copy.calibrationRetrySeconds=cue.retrySeconds;
         copy.calibrationPrompt=cue.instruction+"\n"+(cue.waitingForReady?
             "Take your time. Squeeze either trigger or click Capture pose when ready.":cue.collecting?
-            (cue.seconds?"Hold still: "+std::to_string(cue.seconds)+" seconds":"Keep holding while both wrists are measured."):
+            (cue.seconds?"Hold still: about "+std::to_string(cue.seconds)+" seconds of steady observations remaining":"Keep both wrists visible for the final measurements."):
             "Settle into position. Capture in "+std::to_string(cue.seconds)+" seconds.");
         copy.calibrationSpeech=cue.speech;
         copy.calibrationLeftSamples=alignment_.deviceSamples(1);
@@ -71,11 +78,24 @@ View Engine::view() const {
         copy.state.mode=delivered.mode;
         for(int i=0;i<trackerCount;++i)copy.state.trackers[i].valid=delivered.trackers[i].valid;
     }
+    const auto selected=selection_.load();
+    if(copy.running && !copy.replay && !copy.collecting && !copy.bodyCollecting && selected && copy.frame &&
+       std::none_of(copy.frame->bodies.begin(),copy.frame->bodies.end(),[&](const Body& b){return b.id==selected;}))
+        copy.poseSource="Selected player is not visible. Return to view; if the body ID changed, select your body and Lock player. Automatic recovery needs head and wrists visible.";
     return copy;
 }
 void Engine::message(const std::string &s) {
     std::lock_guard l(mutex_);
     view_.notice = s;
+}
+void Engine::fail(const std::string& reason) {
+    run_=false;record_=false;calibrateBody_=false;
+    measurements_.close();records_.close();
+    std::lock_guard l(mutex_);
+    view_.running=false;view_.output=false;view_.recording=false;
+    view_.collecting=false;view_.bodyCollecting=false;view_.state={};
+    view_.sensor="Stopped after an error";
+    view_.notice=reason+" Tracking stopped. Press Start to retry.";
 }
 void Engine::start(const std::filesystem::path &replay) {
     stop();
@@ -86,18 +106,19 @@ void Engine::start(const std::filesystem::path &replay) {
     {
         std::lock_guard l(mutex_);
         view_.running = true;
+        timingHistory_.clear();
         view_.replay = !replay.empty();
         view_.output = false;
         view_.frames = view_.sent = view_.dropped = 0;
         view_.state = {};
+        view_.lengths={};view_.lengthsCaptured=false;
         view_.health={};view_.outputValidityLosses={};view_.inferenceMs=0;
         view_.samOverlay.reset();view_.poseSource.clear();view_.modelHash.clear();
         view_.frame.reset();
+        latestVr_={};
         view_.exposureStatus.clear();
         view_.tiltAngle.reset();view_.tiltPending=false;tiltTarget_.reset();
         view_.calibration.valid = false;
-        view_.calibration.rawReferenceValid=false;
-        savedAlignment_.forgetLiveReference();
         view_.notice = "Select and lock the player after a body appears.";
     }
     recorder_ = std::thread(&Engine::recordLoop, this);
@@ -115,6 +136,7 @@ void Engine::stop() {
             t->join();
     std::lock_guard l(mutex_);
     view_.running = false;
+    view_.replay = false;
     view_.bodyCollecting=false;calibrateBody_=false;
     view_.recording = false;
     view_.output = false;
@@ -241,11 +263,17 @@ void Engine::useSavedCalibration() {
     if(view_.replay){view_.notice="Saved alignment cannot be confirmed during replay.";return;}
     if(now()-view_.frame->arrival>.5){view_.notice="Saved alignment is retained. Wait for live camera frames, then confirm again.";return;}
     if(view_.tiltPending || !tiltLimiter_.ready(now())){view_.notice="Wait for the camera tilt to settle before confirming alignment.";return;}
-    auto confirmed=savedAlignment_.confirm(view_.frame->vr);
+    if(latestVr_.host<=0 || now()-latestVr_.host>.1 || latestVr_.epoch!=view_.frame->vr.epoch ||
+       latestVr_.referenceSource!=view_.frame->vr.referenceSource) {
+        view_.notice="Saved alignment is retained. Wait for the camera and SteamVR reference to catch up, then confirm again.";return;
+    }
+    auto confirmed=savedAlignment_.confirm(latestVr_);
     view_.notice=confirmed.reason;
     if(!confirmed.valid)return;
     view_.calibration=confirmed;
     savedAlignment_.remember(confirmed);
+    if(auto error=trySaveCalibration(calibrationFile_,confirmed,view_.settings,view_.wristOffsetsReady))
+        view_.notice+=" Restored for this session, but could not save: "+*error;
 }
 void Engine::chooseOutput(bool steamVr) {
     std::lock_guard l(mutex_);if(view_.output)return;
@@ -256,6 +284,9 @@ void Engine::chooseOutput(bool steamVr) {
 }
 void Engine::output(bool enabled) {
     std::lock_guard l(mutex_);
+    if(enabled && (!view_.running || view_.bodyCollecting)) {
+        view_.notice="Start tracking and finish proportions capture before enabling output.";return;
+    }
     if (enabled && (!view_.calibration.valid || view_.replay || view_.collecting)) {
         view_.notice = "Live output requires an accepted camera-to-SteamVR alignment.";
         return;
@@ -285,7 +316,7 @@ void Engine::toggleRecord() {
                   .count();
     recordPath_ = root_ / "recordings" / (std::to_string(ms) + ".kfr");
     std::ostringstream s;
-    s << "{\"format\":2,\"app\":\"0.1.0\",\"rgb\":\"BGRA; dimensions in each frame\",\"depth\":\"native grid, packed "
+    s << "{\"format\":3,\"app\":\"" KF_VERSION "\",\"build\":\"" KF_SOURCE_REVISION "\",\"rgb\":\"BGRA; dimensions in each frame\",\"depth\":\"native grid, packed "
          "millimeters/player\",\"model_sha256\":\"";
     s << view_.modelHash;
     s << "\",\"baseline\":" << view_.settings.baseline << ",\"depth_enabled\":" << view_.settings.depth
@@ -329,7 +360,7 @@ void Engine::captureLoop(std::filesystem::path replay) {
                 while (run_ && view().frames == before)
                     std::this_thread::sleep_for(std::chrono::milliseconds(2));
             }
-            message("Replay finished. No OSC packets were sent.");
+            if(run_)message("Replay finished. No tracker output was sent.");
             return;
         }
         KinectCapture sensor;
@@ -346,13 +377,22 @@ void Engine::captureLoop(std::filesystem::path replay) {
                     std::lock_guard l(mutex_);
                     view_.calibration.valid = false;
                     view_.output = false;
-                    view_.notice = "SteamVR origin changed or restarted; repeat alignment.";
+                    view_.notice = "VR reference updated; output paused. If the Kinect and room setup stayed fixed, use Confirm saved alignment.";
                     view_.collecting = false;
                 }
                 lastEpoch = pose.epoch;
                 history.add(pose);
                 lastVr = t;
                 std::lock_guard l(mutex_);
+                latestVr_=pose;
+                if(pose.referenceEvents & VrRoomSetup) {
+                    view_.calibration.valid=false;view_.output=false;view_.collecting=false;
+                    savedAlignment_.invalidate();
+                    view_.notice="VR room setup started. Finish room setup, then run Align to VR again.";
+                    if(auto error=trySaveCalibration(calibrationFile_,view_.calibration,view_.settings,view_.wristOffsetsReady))
+                        view_.notice+=" Could not save this invalidation: "+*error;
+                }
+                referenceHistory_.add(pose,view_.calibration,view_.output);
                 view_.vr = vr.status;
             }
             if (t >= nextRetry && !sensor.healthy()) {
@@ -416,10 +456,12 @@ void Engine::captureLoop(std::filesystem::path replay) {
                     cfg->calibration = snapshot.calibration;
                     cfg->selectedId = selection_;
                     cfg->lengths = snapshot.lengths;
+                    cfg->lengthsCaptured = snapshot.lengthsCaptured && snapshot.state.body.id==cfg->selectedId;
                     cfg->modelHash = snapshot.modelHash;
                     frame->runConfig = cfg;
                     if (record_)
                         records_.push(frame);
+                    frame->enqueuedHost=now();
                     measurements_.push(std::move(frame));
                     std::lock_guard l(mutex_);
                     view_.dropped = sensor.dropped + measurements_.dropped;
@@ -432,7 +474,7 @@ void Engine::captureLoop(std::filesystem::path replay) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     } catch (const std::exception &e) {
-        message(e.what());
+        fail(std::string("Capture failed: ")+e.what());
     }
 }
 void Engine::processLoop() {
@@ -503,7 +545,7 @@ void Engine::processLoop() {
                 continue;
             const double workStart=now();
             auto frame = *next;
-            const double queueWaitMs=std::max(0.,(workStart-frame->arrival)*1000-frame->captureMs);
+            const double queueWaitMs=frame->enqueuedHost>0?std::max(0.,(workStart-frame->enqueuedHost)*1000):0;
             indexRegistration(*frame);
             if(frame->sensorVersion==2)frame->colorProjection=std::make_shared<ColorProjection>(fitColorProjection(*frame));
             auto config = view();
@@ -570,15 +612,17 @@ void Engine::processLoop() {
                 prevNlfInferenceHost = 0;
             }
             estimator.settings = config.settings;
-            if (config.replay && frame->runConfig)
+            if (config.replay && frame->runConfig) {
                 estimator.restoreLengths(frame->runConfig->lengths);
+                if(frame->runConfig->lengthsCaptured)continuity.restoreLengths(frame->runConfig->lengths,id);
+            }
             auto recoveredId = estimator.reconcileIdentity(*frame, config.calibration);
             if (recoveredId != id) {
                 // Do not overwrite a concurrent explicit player selection from the GUI.
                 auto expectedId = id;
                 if (selection_.compare_exchange_strong(expectedId, recoveredId)) {
                     id = recoveredId;
-                    continuity.reset();
+                    continuity.resetHistory(recoveredId);
                     collectingBody=false;calibrateBody_=false;
                     {std::lock_guard l(mutex_);view_.bodyCollecting=false;}
                     lastCrop.reset();
@@ -694,18 +738,24 @@ void Engine::processLoop() {
                     inferenceFailed=true;message(e.what());
                 }
             }
-            if(inferred)health.inferred(now());
+            if(inferred)health.inferred(now(),config.replay?0:frame->host);
             // Calibration consumes only the raw, currently depth-registered evidence.
             const auto calibrationPrior=learned;
             const double bodyStart=now();
             if(config.settings.baseline==0 && config.settings.inference && config.settings.depth) {
                 auto stable=continuity.update(learned?*learned:PosePrior{},id,*frame,config.calibration,config.settings);
                 learned=stable.valid?std::optional<PosePrior>{stable}:std::nullopt;
-            }else continuity.reset();
+            }else continuity.resetHistory();
             const double bodyMs=(now()-bodyStart)*1000;
             auto state = estimator.process(*frame, keypoints ? &*keypoints : nullptr, config.calibration,learned?&*learned:nullptr);
             state.fitMs+=bodyMs;
             const double workerMs=(now()-workStart)*1000;
+            const auto stageTimes=(inferred && sam.ready())?sam.timings():std::array<double,6>{};
+            const auto planted=estimator.plantedFeet();
+            const ProcessingTiming timing{frame->host,config.replay?0:std::max(0.,(now()-frame->host)*1000),
+                frame->captureMs,queueWaitMs,workerMs,inferred?inferenceMs:0,
+                stageTimes[0],stageTimes[1],stageTimes[2],cadenceControl.hz(),learned?int(learned->rootAnchors):0,
+                inferred,reused,learned && learned->depthPredicted,planted[0],planted[1],!config.replay};
             if(inferred && !config.replay)cadenceControl.observe(frame->host,workerMs,queueWaitMs);
             health.frame(reused,inferenceFailed,id && config.settings.inference &&
                 config.settings.baseline==0 && (sam.ready() || nlf.ready()) && !learned,state);
@@ -732,7 +782,9 @@ void Engine::processLoop() {
                 }
             }
             std::lock_guard l(mutex_);
+            if(!run_)return;
             view_.frame = frame;
+            timingHistory_.add(timing);
             view_.state = state;
             view_.samOverlay=samOverlay;
             view_.cadenceStatus=(cadence==0?"Auto":cadence==1?"Full":cadence==2?"Balanced":"Low GPU")+
@@ -745,6 +797,7 @@ void Engine::processLoop() {
                 (!config.settings.inference || !config.settings.depth)?poseName+" pose disabled in settings":
                 "SDK fallback: "+poseName+" depth anchor unavailable"):"";
             view_.lengths = estimator.lengths();
+            view_.lengthsCaptured=continuity.hasCapturedLengths();
             view_.inferenceMs = lastMeasuredInferenceMs;
             view_.queueMs = config.replay ? 0 : queueWaitMs;
             view_.arrivalToEstimateMs = config.replay ? 0 : (now() - frame->arrival) * 1000;
@@ -761,13 +814,14 @@ void Engine::processLoop() {
                         view_.calibrationDetail=alignment_.agreement();
                         for(int d=1;d<=2;++d)view_.settings.deviceOffsets[d]=alignment_.offsets()[d];
                         view_.wristOffsetsReady=true;
-                        saveCalibration(calibrationFile_,view_.calibration,view_.settings,true);
+                        if(auto error=trySaveCalibration(calibrationFile_,view_.calibration,view_.settings,true))
+                            view_.notice+=" This alignment works for this session, but could not be saved: "+*error;
                     }
                 }
             }
         }
     } catch (const std::exception &e) {
-        message(std::string("Processing stopped: ") + e.what());
+        fail(std::string("Processing failed: ") + e.what());
     }
 }
 void Engine::outputLoop() {
@@ -837,6 +891,7 @@ void Engine::outputLoop() {
                 os.active = true;
                 os.step = s.calibrationStep;
                 os.secondsRemaining = int(s.calibrationSecondsRemaining);
+                os.progressPercent = s.calibrationProgress;
                 os.waitingForReady = s.calibrationWaiting;
                 os.collecting = s.calibrationCapturing;
                 os.retrySeconds = s.calibrationRetrySeconds;
@@ -911,10 +966,19 @@ void Engine::recordLoop() {
 }
 void Engine::exportDiagnostics() {
     auto s = view();
+    ProcessingHistory history;
+    VrReferenceHistory references;
+    {std::lock_guard l(mutex_);history=timingHistory_;references=referenceHistory_;}
     std::filesystem::create_directories(root_ / "diagnostics");
+    std::ofstream timingFile(root_/"diagnostics/processing-timing.csv");
+    timingFile<<std::setprecision(12);history.write(timingFile);
+    if(!timingFile)throw std::runtime_error("Cannot write timing diagnostics");
+    std::ofstream referenceFile(root_/"diagnostics/vr-reference.csv");
+    referenceFile<<std::setprecision(12);references.write(referenceFile);
+    if(!referenceFile)throw std::runtime_error("Cannot write VR reference diagnostics");
     std::ofstream f(root_ / "diagnostics/status.txt");
     if(overlay_)f<<overlay_->diagnostics();
-    f << "Kinect RGB-D 0.1.0 experimental\n"
+    f << "Kinect RGB-D " KF_VERSION "\nbuild_revision=" KF_SOURCE_REVISION "\n"
       << s.sensor << '\n'
       << "exposure_preference=" << (s.prefer30?"prefer-30":"auto") << '\n'
       << "exposure_control=" << s.exposureStatus << '\n'
@@ -925,13 +989,20 @@ void Engine::exportDiagnostics() {
       << "\nqueue_drops=" << s.dropped << "\nrecord_drops=" << s.recordDrops << "\nOSC_sent=" << s.sent
       << "\nOSC_send_errors=" << s.sendErrors << "\ninference_ms=" << s.inferenceMs
       << "\nneural_cadence=" << s.cadenceStatus << "\nneural_actual_hz=" << s.health.neuralHz
-      << "\nneural_result_age_ms=" << s.health.neuralAgeMs << "\nworker_ms=" << s.health.workerMs
+      << "\nneural_completion_age_ms=" << s.health.neuralAgeMs << "\nneural_source_age_ms=" << s.health.sourceAgeMs
+      << "\nneural_source_age_available=" << (s.health.lastInferenceSource>0) << "\nworker_ms=" << s.health.workerMs
       << "\nneural_runs=" << s.health.inferences << "\nneural_reused_frames=" << s.health.reusedFrames
       << "\ninference_errors=" << s.health.inferenceErrors << "\nmissing_body_prior_frames=" << s.health.missingPriorFrames
       << "\nfit_ms=" << s.state.fitMs << "\nqueue_ms=" << s.queueMs
+      << "\nworker_history_samples=" << history.size() << "\nworker_p50_ms=" << history.workerPercentile(.5)
+      << "\nworker_p95_ms=" << history.workerPercentile(.95)
+      << "\ntiming_notes=Worker samples include fresh and reused frames; SAM stage columns are host call durations, not isolated GPU kernel times."
         << "\narrival_to_estimate_ms=" << s.arrivalToEstimateMs << "\ncalibration_rms_m=" << s.calibration.rms
       << "\npose_source=" << s.poseSource << "\nselected_model=" << (s.modelChoice==3?"SAM optimized":s.modelChoice==2?"SAM selective FP8":s.modelChoice==1?"NLF-S":"SAM FP16")
       << "\ncalibration_p95_m=" << s.calibration.p95 << "\ncalibration_result=" << s.calibration.reason
+      << "\nvr_reference_history_samples=" << references.size()
+      << "\nvr_reference_event_bits=1 runtime_start; 2 runtime_stop; 4 universe_change; 8 standing_reset; 16 seated_reset; 32 room_setup_start; 64 source_change; 128 chaperone_commit"
+      << "\nvr_reference_notes=Source keys identify a headset connection, not a physical room. Restore is explicit; physical placement must still match."
       << "\nwrist_offsets_ready=" << s.wristOffsetsReady
       << "\nalignment_routine=" << "guided_learn_offsets_with_holdout"
       << "\ncalibration_pacing=user_ready_then_3s_settle_and_3s_observed_hold"
@@ -983,7 +1054,7 @@ void Engine::exportDiagnostics() {
         if (!csv)
             throw std::runtime_error("Cannot write alignment diagnostics");
     }
-    message("Diagnostics exported: status.txt and alignment-samples.csv. Local 3D alignment samples only; no "
+    message("Diagnostics exported: status.txt, processing-timing.csv, vr-reference.csv and alignment-samples.csv. Local numbers only; no "
             "camera images.");
 }
 } // namespace kf

@@ -37,6 +37,8 @@ ctest --preset release
 
 `ORT_ROOT` and `OPENVR_ROOT` can also be overridden. An existing working local environment need not be reinstalled.
 
+`VERSION` is the single application/package version source. CMake generates a build header containing the version and source revision (with a modified marker for local edits). Reconfigure before preparing binaries for distribution. The desktop title, diagnostics and SteamVR driver property report that build identity.
+
 ## Core tests only
 
 ```powershell
@@ -44,6 +46,8 @@ ctest --preset release
 ```
 
 This builds all ten automated suites without Kinect hardware, SDK headers, GPU inference, camera data or LFS model downloads. CI uses this route. It does not validate GPU inference or real VRChat behavior.
+
+`tests/driver_update.ps1` runs the installer/updater rollback fixtures without changing the real SteamVR registration; CI runs it separately. After a full native build, `build/Release/kf_lifecycle.exe` checks failure/restart and replay controls using an isolated temporary folder and synthetic empty frames. It never starts live capture, initializes VR input, loads a GPU model or enables tracker output. `scripts/build.ps1` runs this extra check for a full build, not CoreOnly.
 
 ## Optional model reference/export work
 
@@ -64,4 +68,8 @@ First assemble a fresh runtime folder, then run:
 ./third_party/sam3d_env/Scripts/python.exe scripts/package_distribution.py archive --source release/dev --name KinectFBT-Custom-Windows-x64
 ```
 
-Packaging uses an explicit allowlist, checks model hashes, and verifies every ZIP entry. Builds/releases stay outside Git. See HANDOFF.md for the previously validated baseline and known limitations.
+Packaging uses an explicit allowlist, checks model hashes, and verifies every ZIP entry. All three project binaries (app, driver and native decoder) come from `build/Release`; dependency/model files come from the selected runtime folder. Package manifests use `VERSION`, including development suffixes. Build all targets and pass the checks before staging. Builds/releases stay outside Git. See HANDOFF.md for the previously validated baseline and known limitations.
+
+New recordings use `KFRGBD03`, retaining calibrated/current raw-space transforms and whether body proportions were explicitly captured. Readers still accept formats 1 and 2. Old apps cannot open new format-3 recordings. Replay always runs inference on every frame; it is not a faithful simulation of live adaptive cadence or GPU contention. Geometry settings are restored from the recording and shown read-only; baseline comparisons and extra tracker choices remain explicit overrides.
+
+Saved alignment is a separate format. Version 1.2.2-dev writes `KF_CALIBRATION_2`, including the original standing-to-raw transform and local headset/streamer identity key. It reads legacy calibration files to retain wrist offsets, but those files need one fresh alignment before saved restoration can work. Do not invent the missing matrix or migrate it from today's standing origin. Runtime epochs are not persisted as room identity. Recording format 3 is unchanged; source/universe/event metadata is live-only and omitted consistently on both sides of replay's reference comparison.

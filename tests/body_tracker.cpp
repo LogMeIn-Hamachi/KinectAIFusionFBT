@@ -18,6 +18,30 @@ PosePrior sample(double time,bool depth=true) {
     p.imageRoot=v[Hip];return p;
 }
 int main(){try {
+    {
+        BodyTracker tracker;Frame f;f.host=10;auto prior=sample(f.host);
+        tracker.update(prior,7,f,{},{});
+        std::array<double,bones.size()> lengths{};
+        for(size_t i=0;i<bones.size();++i){auto[a,b]=bones[i];lengths[i]=norm(prior.points[a]-prior.points[b]);}
+        for(size_t i=0;i<bones.size();++i)if(bones[i]==std::pair{LShoulder,LElbow})lengths[i]=.22;
+        tracker.setLengths(lengths);
+        auto checkLength=[&](uint32_t id){
+            f.host+=.4;prior=sample(f.host);prior.selectedId=id;
+            auto fitted=tracker.update(prior,id,f,{},{});
+            check(fitted.valid && std::abs(norm(fitted.points[LShoulder]-fitted.points[LElbow])-.22)<.005,
+                  "Captured proportions lost across transient reset");
+        };
+        checkLength(7);checkLength(7);
+        tracker.resetHistory();checkLength(7); // diagnostic mode returns
+        tracker.resetHistory(8);checkLength(8); // uniquely verified ID recovery
+        f.host+=.4;prior=sample(f.host);prior.selectedId=9;
+        auto other=tracker.update(prior,9,f,{},{});
+        check(!tracker.hasCapturedLengths() && norm(other.points[LShoulder]-other.points[LElbow])>.28,
+              "A different person inherited captured proportions");
+        tracker.setLengths(lengths);tracker.reset();
+        check(!tracker.hasCapturedLengths(),"Explicit reset retained person-specific proportions");
+        tracker.restoreLengths(lengths,7);checkLength(7);
+    }
     // Every layout preserves the original three outputs exactly; optional
     // joints consume the same SAM estimate without influencing its fit.
     for(int extras=0;extras<8;++extras) {

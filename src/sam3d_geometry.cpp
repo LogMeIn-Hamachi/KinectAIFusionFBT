@@ -44,12 +44,15 @@ Crop sam3dCrop(double x1, double y1, double x2, double y2) {
     return {(x1 + x2) / 2, (y1 + y2) / 2, side, side};
 }
 std::vector<float> sam3dImage(const Frame &f, Crop c) {
+    std::vector<float> out;sam3dImage(f,c,out);return out;
+}
+void sam3dImage(const Frame &f,Crop c,std::vector<float>& out) {
     if (f.width <= 0 || f.height <= 0 || f.bgra.size() != size_t(f.width) * f.height * 4 ||
         !std::isfinite(c.cx) || !std::isfinite(c.cy) || !std::isfinite(c.w) ||
         !std::isfinite(c.h) || c.w <= 0 || c.h <= 0 || c.w > 400000 ||
         c.h > 400000 || std::abs(c.cx) > 100000 || std::abs(c.cy) > 100000)
         throw std::runtime_error("Invalid SAM 3D image/crop");
-    std::vector<float> out(3 * 512 * 512);
+    out.resize(3 * 512 * 512);
     // Integer interpolation exactly matches the 5-bit OpenCV table, including
     // half-up output rounding and black borders, without per-channel float math.
     std::array<int,512> fixedX;
@@ -73,7 +76,6 @@ std::vector<float> sam3dImage(const Frame &f, Crop c) {
             }
         }
     }
-    return out;
 }
 Keypoints sam3dLandmarks(const Sam3dPrediction &p) {
     // Official mhr70.py order -> internal Halpe26 order; -1 has no equivalent.

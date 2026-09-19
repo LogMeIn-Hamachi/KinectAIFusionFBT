@@ -9,6 +9,7 @@
 !/THIRD_PARTY_NOTICES.md
 !/CMakeLists.txt
 !/CMakePresets.json
+!/VERSION
 !/dependencies.lock.json
 !/requirements-models.txt
 !/model.ckpt

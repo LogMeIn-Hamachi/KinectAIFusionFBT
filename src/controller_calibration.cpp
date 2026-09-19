@@ -71,7 +71,7 @@ Calibration calibrateControllers(std::span<const AlignmentObservation> samples,s
             h[fixed][fixed]=1;b[fixed]=0;
         }
         if(!solve(h,b,step)) {
-            result.reason="Point controllers in different directions: forwards, out to the sides, then up. Keep the same grip and wrists visible. Exact angles and head visibility are not required.";
+            result.reason="Make the hand positions more distinct: hands apart, hands at chest, then reach forward. Move from your elbows and shoulders with the same normal grip; keep wrists visible. Exact angles and head visibility are not required.";
             return result;
         }
         V3 rotation{step[0],step[1],step[2]};
@@ -97,7 +97,7 @@ Calibration calibrateControllers(std::span<const AlignmentObservation> samples,s
     if(!result.valid) {
         auto guidance=result.reason.find(" Keep hands visible");
         if(guidance!=std::string::npos)result.reason.resize(guidance);
-        result.reason="Controller-only alignment did not agree. Keep wrists visible, hold each pose, and turn both controllers as directed by the palm instructions. "+result.reason;
+        result.reason="Controller-only alignment did not agree. Keep wrists clear of your torso and hold the shown hand positions with a normal grip. "+result.reason;
         return result;
     }
     // A good hand must not hide a bad hand in the combined acceptance fraction.

@@ -3,6 +3,7 @@ from pathlib import Path
 import argparse
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import zipfile
@@ -10,7 +11,10 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'release/dev'
 TEMPLATES = ROOT / 'packaging/windows'
-NAME = 'KinectAIFusionFBT-v1.2.0-Windows-x64'
+VERSION = (ROOT / 'VERSION').read_text(encoding='utf-8').strip()
+if not re.fullmatch(r'\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?', VERSION):
+    raise RuntimeError('Invalid VERSION file')
+NAME = f'KinectAIFusionFBT-v{VERSION}-Windows-x64'
 STAGE = ROOT / 'release' / NAME
 ARCHIVE = ROOT / 'release' / (NAME + '.zip')
 REPORT = ROOT / 'artifacts/packaging' / NAME
@@ -39,7 +43,8 @@ def selection():
     for name in ROOT_DLLS:
         files[name] = SOURCE / name
     for name in SAM_DLLS:
-        files['sam3d-runtime/' + name] = SOURCE / 'sam3d-runtime' / name
+        files['sam3d-runtime/' + name] = (ROOT / 'build/Release' / name if name == 'kf_sam3d_decoder.dll'
+                                        else SOURCE / 'sam3d-runtime' / name)
     for model in ('sam3d', 'sam3d-optimized'):
         for name in ('backbone.onnx', 'backbone.onnx.data', 'backbone.onnx.files.sha256', 'decoder.pt'):
             rel = f'assets/{model}/{name}'
@@ -93,7 +98,7 @@ def main():
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
         prerequisites = {
-            'schema': 2, 'release': 'v1.2.0', 'platform': 'Windows x64; tested Windows 11',
+            'schema': 2, 'release': 'v' + VERSION, 'platform': 'Windows x64; tested Windows 11',
             'gpu': 'NVIDIA required; tested RTX 5070 Ti; CUDA 12.8 decoder and TensorRT RTX 1.6 encoder',
             'sensor': ['Kinect v2 + powered USB 3 adapter + installed Microsoft Kinect20 runtime',
                        'Kinect v1 + powered adapter + installed Microsoft Kinect SDK 1.8'],
@@ -132,7 +137,7 @@ def main():
             text = path.read_text(encoding='utf-8')
             if any(s in text.lower() for s in ('c:/users/', 'c:\\users/', 'c:\\users\\')):
                 raise RuntimeError('Personal data found in ' + rel)
-    manifest = {'release': 'v1.2.0', 'scope': 'All distributed files except this manifest; locally generated files are not included', 'files': records}
+    manifest = {'release': 'v' + VERSION, 'scope': 'All distributed files except this manifest; locally generated files are not included', 'files': records}
     (STAGE / 'package-sha256.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     print('Integrity/allowlist checks passed; creating full ZIP', flush=True)
     if args.action == 'refresh':

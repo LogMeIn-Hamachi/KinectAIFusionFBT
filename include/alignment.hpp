@@ -10,7 +10,6 @@ class SavedAlignment {
 public:
     void remember(const Calibration& cal,bool accepted=true){saved_=cal;accepted_=accepted;}
     void invalidate(){accepted_=false;}
-    void forgetLiveReference(){saved_.rawReferenceValid=false;}
     bool available() const{return accepted_;}
     Calibration confirm(const VrSample& vr) const {
         auto out=saved_;out.valid=false;
@@ -18,16 +17,21 @@ public:
         else if(!finiteRigid(out.transform) || !std::isfinite(out.spread) || out.spread<.07 ||
                 !std::isfinite(out.rms) || out.rms<0 || out.rms>=calibrationMaxRms)
             out.reason="The saved alignment failed its quality checks. Run Align to VR.";
+        else if(!out.rawReferenceValid || !finiteRigid(out.standingToRaw))
+            out.reason="This older alignment has no saved room reference. Run Align to VR once to save a reusable alignment.";
         else if(!vr.rawTransformValid || !finiteRigid(vr.standingToRaw))
-            out.reason="Saved alignment is available. Wake or reconnect SteamVR, then confirm again.";
-        else if(out.rawReferenceValid && out.rawEpoch!=vr.epoch)
-            out.reason="SteamVR restarted or its physical tracking origin changed. The saved alignment cannot be verified; run Align to VR.";
+            out.reason="Saved alignment is retained. Wake SteamVR and let tracking settle, then confirm again.";
+        else if(!out.referenceSource || out.referenceSource!=vr.referenceSource)
+            out.reason="The saved alignment belongs to a different or unknown VR tracking source. Use the original headset connection or run Align to VR.";
         else {
-            const bool restored=!out.rawReferenceValid;
-            if(restored)bindTrackingReference(out,vr);
+            // Explicit restoration assumes the camera and physical room still
+            // match. Never replace the original standing-to-raw matrix: doing
+            // so applies the old standing coordinates to a different origin.
+            const bool restored=out.rawEpoch!=vr.epoch || out.referenceUniverse!=vr.referenceUniverse;
+            out.rawEpoch=vr.epoch;out.referenceUniverse=vr.referenceUniverse;
             out.valid=true;
-            out.reason=restored?"Saved alignment confirmed. This assumes the Kinect stayed fixed and OVR offsets were reset before confirmation.":
-                "Previous alignment confirmed in the same SteamVR reference. No new poses needed.";
+            out.reason=restored?"Saved alignment restored with its original room reference. Check tracker placement; if the Kinect or room setup changed, run Align to VR.":
+                "Saved alignment restored; original room reference and playspace movement preserved.";
         }
         return out;
     }
@@ -48,6 +52,11 @@ struct AlignmentObservation {
     V3 offset;
     Pair3 pair() const { return {camera, pose.p + pose.q.rotate(offset)}; }
 };
+struct AlignmentProgress {
+    int percent{},secondsRemaining{int(calibrationHoldSeconds)};
+    bool ready{};
+};
+AlignmentProgress alignmentProgress(std::span<const AlignmentObservation>,double time);
 class AlignmentSession {
     bool automaticOffsets_{};
     bool controllersOnly_{};
@@ -82,6 +91,7 @@ class AlignmentSession {
 Calibration calibrateControllers(std::span<const AlignmentObservation>, std::array<V3,3> &offsets,const Plane* floor=nullptr);
 struct AlignmentCue {
     int step{}, seconds{}, retrySeconds{};
+    int progressPercent{};
     bool collecting{},waitingForReady{};
     std::string instruction, speech;
 };

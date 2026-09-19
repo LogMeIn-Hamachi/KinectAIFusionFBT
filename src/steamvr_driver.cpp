@@ -1,4 +1,5 @@
 #include "steamvr_bridge.hpp"
+#include "build_version.hpp"
 #include "tracker_smoothing.hpp"
 #include <openvr_driver.h>
 #include <cstdio>
@@ -20,6 +21,7 @@ public:
         vr::VRProperties()->SetStringProperty(props,vr::Prop_ModelNumber_String,"Kinect FBT virtual tracker");
         vr::VRProperties()->SetStringProperty(props,vr::Prop_ManufacturerName_String,"Kinect FBT");
         vr::VRProperties()->SetStringProperty(props,vr::Prop_TrackingSystemName_String,"kinect_fbt");
+        vr::VRProperties()->SetStringProperty(props,vr::Prop_DriverVersion_String,KF_VERSION " (" KF_SOURCE_REVISION ")");
         vr::VRProperties()->SetStringProperty(props,vr::Prop_ControllerType_String,"vive_tracker");
         vr::VRProperties()->SetStringProperty(props,vr::Prop_InputProfilePath_String,"{kinect_fbt}/input/tracker_profile.json");
         vr::VRProperties()->SetStringProperty(props,vr::Prop_RenderModelName_String,"{htc}vr_tracker_vive_1_0");

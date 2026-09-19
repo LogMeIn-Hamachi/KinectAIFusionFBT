@@ -1,31 +1,35 @@
-# KinectAIFusionFBT v1.2.0 — Optional trackers
+# KinectAIFusionFBT v1.2.2 — Saved alignment and reliability
 
-## Changes since v1.1.0
+## Changes since v1.2.0
 
-- Add optional left/right knee, left/right elbow and chest trackers to SteamVR or OSC.
-- Hips and feet remain the default. Simple **Add: Knees / Elbows / Chest** checkboxes let you choose any combination, up to eight trackers.
-- Replaced the confusing layout dropdown and removed the selection-reset behavior that could interfere with choosing an item.
-- Extra trackers reuse the existing learned body pose; no additional AI inference. They share output smoothing, freshness checks and playspace conversion.
-- Original hips/feet tracking and calibration algorithms remain unchanged.
+- Save the complete calibration coordinate reference. Restore it across app/capture restarts and playspace changes without attaching old coordinates to a new standing origin. SteamVR and OSC share the repair.
+- Permit explicit same-headset/connection restoration after a runtime change. Reject incompatible or unavailable references; confirmation never starts output automatically.
+- Preserve captured proportions across temporary tracking gaps and verified recovery of the same person.
+- Harden SteamVR input/overlay shutdown and app error recovery. Failed calibration saves now retain session usability with a clear warning.
+- Make calibration progress follow actual accepted observations and clarify diagnostic/replay controls.
+- Preserve coordinate references and captured proportions in new recordings, while retaining readers for older recordings.
+- Reuse the SAM image input buffer without changing input pixels. This reduces allocation/preprocessing work; no claim of increased VRChat frame rate.
+- Add local numeric processing and VR-reference diagnostics, plus version/source identification.
 
-## Updating an existing installation
+Tracking articulation, foot contact, smoothing and Auto/30/20/15 Hz policies retain their existing behavior. Optional knees, elbows and chest remain available; default is hips and feet.
 
-1. Close the app and SteamVR completely.
-2. Download **KinectAIFusionFBT-v1.2.0-AppUpdate.zip** and extract its contents into your existing v1.1.0 application folder, replacing included files. Your models, calibration and preferences are retained.
+## Upgrade instructions
+
+1. Close the app and SteamVR.
+2. Extract **KinectAIFusionFBT-v1.2.2-AppUpdate.zip** into an existing v1.2.0 installation, replacing the included files. Models and native dependencies are unchanged. Personal calibration/preferences are not included in the update.
 3. Run **Update SteamVR Trackers.cmd**, then restart SteamVR and the app.
+4. **Run Align to VR once after upgrading.** Old saves lack the original coordinate reference. Learned wrist offsets are retained, but cannot supply the missing reference.
 
-**Update the app, driver and tracker profile together.** This release uses a new tracker connection format; mixing old and new components will not work.
-
-To add trackers, pause output, tick the desired checkboxes beside Confirm saved alignment, start output, then recalibrate FBT **inside VRChat**. Knees and elbows are pairs. A layout change does not require redoing the app's camera alignment unless that alignment is already wrong.
+Update app and driver together. New recordings require this version's reader; older recordings remain readable. Back up your installation before downgrading because older versions cannot read the new saved-alignment format.
 
 ## New installations
 
-Download all three **KinectAIFusionFBT-v1.2.0-Windows-x64.zip.001 / .002 / .003** parts into one folder. Open `.001` with 7-Zip and extract the complete application. These are archive parts, not separate installers. The full package includes SAM original/optimized models and native runtimes. NVIDIA/Kinect drivers and SteamVR are external prerequisites. SHA-256 checksums are included.
+Download all three **KinectAIFusionFBT-v1.2.2-Windows-x64.zip.001 / .002 / .003** parts into one folder and extract `.001` with 7-Zip. All parts are required. The full package includes SAM original/optimized and native runtimes. Kinect/NVIDIA drivers and SteamVR are external prerequisites. Checksums are included.
 
-## Validation and known limitations
+## Validation and remaining limitations
 
-All ten offline test suites pass, including all tracker combinations, unchanged base outputs, missing-pose handling, and SteamVR/OSC smoothing and playspace parity. The user confirmed additional trackers work. Their live accuracy depends on visibility; torso/limb twist is inferred. Single-camera occlusion, sideways and lying poses remain difficult. The final checkbox UI still needs broader interactive validation.
+Full Release build, all ten offline suites, offline startup/restart checks and installer/updater fixture tests passed. Saved-reference tests cover restart, combined playspace translation/rotation, incoming controllers and all eight SteamVR/OSC tracker roles. Packages use explicit file allowlists, model hashes and ZIP integrity checks.
 
-**Saved alignment after Quest tracking recovery remains unresolved.** Confirm saved alignment can accept an alignment that leaves trackers displaced after headset tracking resumes. Use a fresh **Align to VR** when this occurs. This release does not attempt to fix it.
+**Full Quest sleep/resume recovery still needs live verification.** A short numeric headset-removal test did not establish a full sleep transition or physical tracker alignment afterward. This release fixes demonstrated persistence defects; it does not guarantee recovery from an unreported headset-map shift. Check placement after confirming, and align again after moving the Kinect or changing physical room setup. Diagnostics saves numbers only, not camera images.
 
-Packages are assembled from an explicit allowlist and verified by SHA-256 and ZIP CRC. No personal recordings, screenshots, calibration, preferences, diagnostics or GPU caches are included.
+Single-camera occlusion, sideways and lying poses remain difficult. Overlay reliability still needs broader live validation. No personal media, calibration files, preferences, diagnostics, device identifiers or GPU caches are distributed.

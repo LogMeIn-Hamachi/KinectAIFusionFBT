@@ -2,11 +2,30 @@
 #include "alignment.hpp"
 #include "tracker_smoothing.hpp"
 #include "osc_tracking.hpp"
+#include "runtime_lifetime.hpp"
+#include <future>
 #include <openvr_driver.h>
 #include <iostream>
 using namespace kf;
 void check(bool ok,const char* msg){if(!ok)throw std::runtime_error(msg);}
 int main(){try {
+    {
+        RuntimeLifetime lifetime;std::promise<void> attempting,entered;
+        auto attemptingFuture=attempting.get_future();auto enteredFuture=entered.get_future();
+        auto apiCall=lifetime.read();
+        auto shutdown=std::async(std::launch::async,[&]{
+            attempting.set_value();auto exclusive=lifetime.write();entered.set_value();
+        });
+        attemptingFuture.wait();
+        const bool waited=enteredFuture.wait_for(std::chrono::milliseconds(20))==std::future_status::timeout;
+        apiCall.unlock();shutdown.get();
+        check(waited,"Runtime teardown invalidated an in-flight API call");
+        // A shared guard must permit normal input and overlay calls together.
+        auto input=lifetime.read();
+        auto overlay=std::async(std::launch::async,[&]{auto concurrent=lifetime.read();return true;});
+        const bool concurrent=overlay.wait_for(std::chrono::seconds(2))==std::future_status::ready;
+        input.unlock();check(overlay.get() && concurrent,"Overlay serialized ordinary input calls");
+    }
     State s;s.host=10;s.lastObserved=10;auto& t=s.trackers[0];t.valid=true;t.observedHost=10;t.p={.2,1.1,2};t.q=axisAngle({0,1,0},.4);t.velocity={.1,0,0};
     Calibration cal;cal.valid=true;cal.transform={axisAngle({0,1,0},.3),{1,0,-2}};
     VrSample vr;vr.rawTransformValid=true;vr.standingToRaw={axisAngle({0,1,0},-.7),{.4,.1,.8}};

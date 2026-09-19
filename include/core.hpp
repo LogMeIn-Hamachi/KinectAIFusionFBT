@@ -147,11 +147,12 @@ struct Calibration {
     double rms{}, p95{}, spread{};
     bool valid{};
     std::string reason;
-    // Live reference captured at alignment/confirmation, never serialized into
-    // old recordings or reused across a SteamVR restart without confirmation.
+    // Camera-to-standing and standing-to-raw form one calibration. Keep both
+    // across persistence; rawEpoch is only a live connection barrier.
     Rigid standingToRaw{};
     std::uint64_t rawEpoch{};
     bool rawReferenceValid{};
+    std::uint64_t referenceSource{},referenceUniverse{};
 };
 Calibration calibrate(std::span<const Pair3> pairs);
 Plane fitFloor(std::span<const V3> points);
@@ -315,12 +316,21 @@ struct DevicePose {
     Q q{};
     bool valid{};
 };
+enum VrReferenceEvent : std::uint32_t {
+    VrRuntimeStarted=1, VrRuntimeStopped=2, VrUniverseChanged=4,
+    VrStandingReset=8, VrSeatedReset=16, VrRoomSetup=32, VrSourceChanged=64,
+    VrChaperoneCommitted=128
+};
 struct VrSample {
     double host{};
     std::array<DevicePose, 3> devices{};
     std::uint64_t epoch{};
-    Rigid standingToRaw{}; // live-only; recording format remains unchanged.
+    Rigid standingToRaw{}; // Physical reference; retained by recording format 3.
     bool rawTransformValid{};
+    // Source identity and universe are context, not proof of a physical room
+    // match. Live-only in recordings; saved calibration format 2 retains them.
+    std::uint64_t referenceSource{},referenceUniverse{};
+    std::uint32_t referenceEvents{};
     // Live-only calibration controls; never stored in recordings.
     std::array<bool,2> triggerPressed{},triggerAvailable{};
 };
@@ -335,10 +345,12 @@ inline Rigid inverseRigid(const Rigid& a) {
 }
 inline bool bindTrackingReference(Calibration& cal,const VrSample& vr) {
     if(!vr.rawTransformValid || !finiteRigid(vr.standingToRaw))return false;
-    cal.standingToRaw=vr.standingToRaw;cal.rawEpoch=vr.epoch;cal.rawReferenceValid=true;return true;
+    cal.standingToRaw=vr.standingToRaw;cal.rawEpoch=vr.epoch;cal.rawReferenceValid=true;
+    cal.referenceSource=vr.referenceSource;cal.referenceUniverse=vr.referenceUniverse;return true;
 }
 inline bool trackingReferenceValid(const Calibration& cal,const VrSample& vr) {
     return cal.rawReferenceValid && vr.rawTransformValid && cal.rawEpoch==vr.epoch &&
+        cal.referenceSource==vr.referenceSource &&
         finiteRigid(cal.standingToRaw) && finiteRigid(vr.standingToRaw);
 }
 // Incoming VR devices use the same physical reference as the camera. A virtual
@@ -371,6 +383,7 @@ struct Frame {
     int width{640}, height{480};
     int depthWidth{640}, depthHeight{480}, sensorVersion{1};
     double captureMs{}; // host capture/conversion/mapping work, excludes waiting.
+    double enqueuedHost{}; // Live processing-queue entry time; never serialized.
     double exposureMs{}, colorIntervalMs{};
     std::shared_ptr<const ColorProjection> colorProjection; // derived, not serialized.
     std::vector<std::uint8_t> bgra;
@@ -503,6 +516,7 @@ struct ReplayConfig {
     Calibration calibration;
     std::uint32_t selectedId{};
     std::array<double, bones.size()> lengths{};
+    bool lengthsCaptured{}; // Explicit Capture proportions, not automatic estimates.
     std::string modelHash;
 };
 // Confirm discontinuous observations, then allow recovery instead of rejecting forever.
@@ -651,6 +665,7 @@ class Estimator {
     bool calibrateLengths(const Body &b);
     bool calibrateLengths(std::span<const Body> samples);
     const auto &lengths() const { return lengths_; }
+    std::array<bool,2> plantedFeet()const{return {plants_[0].planted,plants_[1].planted};}
     void restoreLengths(const std::array<double, bones.size()> &values) {
         for (double v : values)
             if (!std::isfinite(v) || v < 0 || v > .85)

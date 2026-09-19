@@ -4,6 +4,7 @@
 #include "alignment.hpp"
 #include "tilt.hpp"
 #include "tracking_health.hpp"
+#include "vr_reference_history.hpp"
 #include <thread>
 namespace kf {
 struct View {
@@ -19,6 +20,7 @@ struct View {
     Calibration calibration;
     Settings settings;
     std::array<double, bones.size()> lengths{};
+    bool lengthsCaptured{};
     std::string modelHash;
     std::string sensor = "Stopped", inference = "Not loaded", vr = "SteamVR not connected",
                 notice = "Start the sensor or open a local recording.";
@@ -29,6 +31,7 @@ struct View {
     bool running{}, recording{}, replay{}, output{}, collecting{};
     unsigned calibrationSamples{};
     double calibrationSecondsRemaining{};
+    int calibrationProgress{};
     std::string calibrationPrompt, calibrationDetail;
     std::string calibrationSpeech, bodyPrompt, bodySpeech;
     int calibrationStep{};
@@ -56,6 +59,9 @@ class Engine {
     std::filesystem::path calibrationFile_;
     mutable std::mutex mutex_;
     View view_;
+    ProcessingHistory timingHistory_;
+    VrReferenceHistory referenceHistory_;
+    VrSample latestVr_;
     BoundedQueue<std::shared_ptr<Frame>> measurements_{2}, records_{4};
     std::thread capture_, process_, output_, recorder_;
     std::atomic_bool run_{}, record_{};
@@ -77,6 +83,7 @@ class Engine {
     void outputLoop();
     void recordLoop();
     void message(const std::string &);
+    void fail(const std::string &);
 
   public:
     explicit Engine(std::filesystem::path root);

@@ -223,8 +223,29 @@ void GuidedAlignment::capturePose(double time) {
     captureStart_=time+calibrationSettleSeconds;
     sessions_[stage_].reset(true,true);retryReason_.clear();
 }
+AlignmentProgress alignmentProgress(std::span<const AlignmentObservation> samples,double time) {
+    std::array<int,3> count{};std::array<double,3> first{},last{};
+    for(const auto& s:samples)if(s.device>=1 && s.device<=2) {
+        if(!count[s.device])first[s.device]=s.host;
+        ++count[s.device];last[s.device]=s.host;
+    }
+    AlignmentProgress out;double fraction=1,span=calibrationHoldSeconds;out.ready=true;
+    for(int d=1;d<=2;++d) {
+        const double covered=count[d]?std::max(0.,last[d]-first[d]):0;
+        span=std::min(span,covered);
+        fraction=std::min({fraction,count[d]/12.,covered/calibrationHoldSeconds});
+        out.ready&=count[d]>=12 && covered>=calibrationHoldSeconds && time-last[d]<=.4 && time>=last[d];
+    }
+    out.secondsRemaining=int(std::ceil(std::max(0.,calibrationHoldSeconds-span)));
+    out.percent=std::clamp(int(100*fraction),0,out.ready?100:99);
+    return out;
+}
 AlignmentCue GuidedAlignment::cue(double time)const {
     auto c=alignmentCue(stage_,captureStart_?time-*captureStart_:0,done_,!captureStart_);
+    if(c.collecting) {
+        const auto progress=alignmentProgress(sessions_[stage_].samples(),time);
+        c.seconds=progress.secondsRemaining;c.progressPercent=progress.percent;
+    }
     if(c.waitingForReady && !retryReason_.empty())c.speech=retryReason_+" "+c.speech;
     return c;
 }
@@ -254,19 +275,14 @@ void GuidedAlignment::add(const Frame& frame,uint32_t id,const Settings& setting
     if(elapsed>20){retry("Could not see both wrists steadily. Adjust your position, then squeeze a trigger to retry this pose. Earlier poses are kept.");return;}
     auto& session=sessions_[stage_];
     if(elapsed<0){session.pause();return;}
-    // One wrist convention throughout fit and check; switching between SDK and
-    // learned wrist centres would itself change the attachment being calibrated.
+    // Use the same observation-selection policy for fit and independent check.
+    // SDK wrists are preferred; depth-supported learned wrists remain a fallback.
     if(!reference_.rawReferenceValid && size()==0)bindTrackingReference(reference_,frame.vr);
     session.add(frame,id,settings,prior,&reference_);
-    std::array<int,3> count{};std::array<double,3> first{},last{};
-    for(auto& s:session.samples()) {
-        if(!count[s.device])first[s.device]=s.host;
-        ++count[s.device];last[s.device]=s.host;
-    }
     if(elapsed<calibrationHoldSeconds)return;
     // Waiting for visibility is not hold time. Require a real span of paired
     // steady observations and a recent observation of BOTH wrists before moving on.
-    for(int d=1;d<=2;++d)if(count[d]<12 || last[d]-first[d]<calibrationHoldSeconds || frame.host-last[d]>.4)return;
+    if(!alignmentProgress(session.samples(),frame.host).ready)return;
     if(stage_<3){++stage_;stageStart_=frame.host;captureStart_.reset();triggerReleased_={};return;}
     if(stage_==3) {
         std::vector<AlignmentObservation> fit;
@@ -275,6 +291,7 @@ void GuidedAlignment::add(const Frame& frame,uint32_t id,const Settings& setting
         candidate_=calibrateControllers(fit,offsets_,floor.valid?&floor:nullptr);
         candidate_.standingToRaw=reference_.standingToRaw;candidate_.rawEpoch=reference_.rawEpoch;
         candidate_.rawReferenceValid=reference_.rawReferenceValid;
+        candidate_.referenceSource=reference_.referenceSource;candidate_.referenceUniverse=reference_.referenceUniverse;
         for(int i=0;i<4;++i)sessions_[i].applyOffsets(offsets_);
         if(!candidate_.valid){
             stage_=1;sessions_[2].reset(true,true);sessions_[3].reset(true,true);

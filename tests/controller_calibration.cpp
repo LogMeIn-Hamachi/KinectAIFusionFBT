@@ -2,12 +2,33 @@
 #include "io.hpp"
 #include "tilt.hpp"
 #include "vr_overlay.hpp"
+#include "steamvr_bridge.hpp"
+#include "osc_tracking.hpp"
+#include "vr_reference_history.hpp"
+#include <fstream>
+#include <sstream>
 #include <iostream>
 using namespace kf;
 int main() {
     try {
         int checks=0;
         auto check=[&](bool ok,const char *message){if(!ok)throw std::runtime_error(message);++checks;};
+        {
+            std::vector<AlignmentObservation> observations;
+            for(int i=0;i<18;++i)for(int d=1;d<=2;++d)
+                observations.push_back({10+i*.1,d,{},{},{}});
+            auto progress=alignmentProgress(observations,11.7);
+            check(!progress.ready && progress.percent<100 && progress.secondsRemaining==2,
+                  "Sample count alone falsely completes calibration progress");
+            for(int d=1;d<=2;++d)observations.push_back({13.1,d,{},{},{}});
+            progress=alignmentProgress(observations,13.1);
+            check(progress.ready && progress.percent==100 && progress.secondsRemaining==0,
+                  "Complete observed span does not finish progress");
+            progress=alignmentProgress(observations,13.6);
+            check(!progress.ready && progress.percent<100,"Stale wrists show complete progress");
+            observations.erase(std::remove_if(observations.begin(),observations.end(),[](auto& s){return s.device==2;}),observations.end());
+            check(!alignmentProgress(observations,13.1).ready,"One wrist completed the pose");
+        }
         Rigid truth{axisAngle({0,1,0},1.1)*axisAngle({1,0,0},-.45),{.6,1.2,-1.4}};
         std::array<V3,3> expected{{{}, {.045,-.065,.12},{-.035,-.08,.085}}};
         auto samples=[&](int rotationMode=0) {
@@ -52,11 +73,12 @@ int main() {
         check(!stableFloor.value().valid,"Sudden floor-height change retained stale floor reference");
         for(double angleScale:{.7,1.})for(double fps:{15.,30.})for(bool badCheck:{false,true})for(bool useFloor:{false,true}) {
             VrSample referenceVr;referenceVr.epoch=3;referenceVr.rawTransformValid=true;
+            referenceVr.referenceSource=17;referenceVr.referenceUniverse=29;
             referenceVr.standingToRaw={axisAngle({0,1,0},.4),{1,.2,-2}};
             GuidedAlignment routine;routine.reset(108,&referenceVr);Settings qs;
             double finished=0,entered=100;int previousStage=-1;
             for(int tick=0;tick<int(100*fps) && !routine.done();++tick) {
-                Frame f;f.host=100+tick/fps;f.vr.host=f.host;Body b;b.id=42;
+                Frame f;f.host=100+tick/fps;f.vr=referenceVr;f.vr.host=f.host;Body b;b.id=42;
                 if(useFloor)f.floor=floor;
                 auto cue=routine.cue(f.host);int stage=cue.step;
                 if(stage!=previousStage){entered=f.host;previousStage=stage;}
@@ -85,6 +107,8 @@ int main() {
             if(!badCheck) {
                 check(norm(routine.result().transform.t-truth.t)<1e-5,"Guided routine recovers tilted transform");
                 check(norm(routine.offsets()[1]-expected[1])<1e-5,"Guided routine learns unknown controller offsets");
+                check(routine.result().referenceSource==17 && routine.result().referenceUniverse==29 &&
+                      trackingReferenceValid(routine.result(),referenceVr),"Guided holdout result lost its VR reference identity");
             }else {
                 check(routine.cue(100+finished).waitingForReady && routine.cue(100+finished).step==4,"Bad check restarted the whole routine");
                 auto earlier=routine.size();routine.capturePose(105+finished);
@@ -290,6 +314,8 @@ int main() {
         check(!limiter.ready(47.9) && limiter.ready(48),"Enforce 20 second rest after 15 changes");
         check(limiter.claim(48) && limiter.consecutive==1,"Rest resets motor command count");
         auto path=std::filesystem::temp_directory_path()/"kf-controller-calibration-test.txt";
+        check(trySaveCalibration(path/"not-a-folder"/"alignment.txt",held,settings).has_value(),
+              "Calibration save failure did not return a recoverable error");
         saveCalibration(path,held,settings);Calibration restored;Settings restoredSettings;
         check(loadCalibration(path,restored,restoredSettings),"Accepted saved calibration remains loadable");
         held.valid=false;held.spread=0;saveCalibration(path,held,settings);
@@ -302,6 +328,7 @@ int main() {
             Calibration accepted;accepted.valid=true;accepted.spread=.2;accepted.rms=.025;
             accepted.transform={axisAngle({0,1,0},.3),{.4,.1,-1}};
             VrSample vr;vr.epoch=9;vr.rawTransformValid=true;
+            vr.referenceSource=1234;vr.referenceUniverse=50;
             vr.standingToRaw={axisAngle({0,1,0},-.2),{1,0,0}};
             bindTrackingReference(accepted,vr);
             SavedAlignment saved;saved.remember(accepted);
@@ -316,21 +343,97 @@ int main() {
             auto dragged=vr;dragged.standingToRaw.t.y+=1;
             confirmed=saved.confirm(dragged);
             check(confirmed.valid && norm(confirmed.standingToRaw.t-accepted.standingToRaw.t)<1e-9,"Confirmation rebound alignment to virtual space drag");
-            auto restarted=vr;restarted.epoch++;
-            check(!saved.confirm(restarted).valid && saved.confirm(restarted).reason.find("restarted")!=std::string::npos,"Real origin change silently rebound old alignment");
+            auto restarted=vr;restarted.epoch++;restarted.referenceUniverse++;
+            check(!trackingReferenceValid(accepted,restarted),"Runtime change reused live alignment without confirmation");
+            confirmed=saved.confirm(restarted);
+            check(confirmed.valid && confirmed.rawEpoch==restarted.epoch,"Same source could not explicitly restore saved reference after restart");
+            check(norm(confirmed.standingToRaw.t-accepted.standingToRaw.t)<1e-9,"Restart rebound the original room reference");
+            auto otherSource=restarted;otherSource.referenceSource++;
+            check(!saved.confirm(otherSource).valid,"Another headset/streamer accepted this source's saved alignment");
+            otherSource.referenceSource=0;
+            check(!saved.confirm(otherSource).valid,"Unavailable source identity allowed restoration");
             // An unfinished/failed attempt operates on a separate live result.
             auto attempted=accepted;attempted.valid=false;attempted.spread=0;
             check(saved.confirm(vr).valid,"Unaccepted attempt overwrote saved transform");
             saved.invalidate();check(!saved.confirm(vr).valid,"Camera/offset invalidation reused stale alignment");
-            saved.remember(accepted);saved.forgetLiveReference();
+            saved.remember(accepted);
             check(saved.confirm(restarted).valid,"Explicit saved confirmation after app/capture restart failed");
             saved.remember(attempted,false);check(!saved.confirm(vr).valid,"Another sensor reused previous accepted alignment");
             attempted=accepted;attempted.rms=.2;saved.remember(attempted);
             check(!saved.confirm(vr).valid,"Bad saved quality accepted");
             saveCalibration(path,accepted,settings,true);Calibration loaded;
             check(loadCalibration(path,loaded,restoredSettings),"Accepted alignment failed to reload");
+            check(!loaded.valid && loaded.rawEpoch==0 && loaded.rawReferenceValid && loaded.referenceSource==vr.referenceSource &&
+                  loaded.referenceUniverse==vr.referenceUniverse,"Saved reference identity was lost or live validity persisted");
             saved.remember(loaded);
             check(saved.confirm(vr).valid,"Disk-loaded accepted alignment could not be confirmed");
+            // Restore after disk/session restart and a simultaneous standing
+            // translation/turn. Compare both outputs AND incoming constraints.
+            State state;state.host=10;state.lastObserved=10;state.trackerMask=allTrackerMask;
+            for(int i=0;i<trackerCount;++i){auto& t=state.trackers[i];t.valid=true;t.observedHost=10;
+                t.p={i*.15,.1+i*.13,2};t.q=axisAngle({0,1,0},i*.1);}
+            const auto baseline=trackerPacket(state,accepted,vr,10,true);
+            for(Rigid drag:{Rigid{},Rigid{{},{0,1,0}},Rigid{axisAngle({0,1,0},pi/6),{1,.4,-.2}}}) {
+                auto current=restarted;current.standingToRaw=composeRigid(vr.standingToRaw,inverseRigid(drag));
+                auto restoredReference=saved.confirm(current);
+                check(restoredReference.valid && trackingReferenceValid(restoredReference,current),"Restored reference is unusable after a playspace change");
+                const auto packet=trackerPacket(state,restoredReference,current,10,true);OscTracking osc;
+                auto poses=osc.update(state,restoredReference,current,10);
+                for(int i=0;i<trackerCount;++i) {
+                    const auto& before=baseline.poses[i];const auto& after=packet.poses[i];
+                    V3 raw{after.position[0],after.position[1],after.position[2]};
+                    check(after.valid && norm(raw-V3{before.position[0],before.position[1],before.position[2]})<1e-9,
+                          "Disk restore displaced a native tracker in physical space");
+                    check(poses[i].valid && norm(poses[i].p-current.standingToRaw.inverse(raw))<1e-8,
+                          "OSC and native saved-reference restoration disagree");
+                    Q native{after.rotation[0],after.rotation[1],after.rotation[2],after.rotation[3]};
+                    check(std::abs(dot(poses[i].q,current.standingToRaw.q.conjugate()*native))>1-1e-8,
+                          "OSC and native restored rotations disagree");
+                }
+                DevicePose physical{{.2,1.1,-.5},axisAngle({1,0,0},.4),true};
+                current.devices[1]={drag.apply(physical.p),normalized(drag.q*physical.q),true};
+                auto incoming=calibrationVr(current,restoredReference);
+                check(incoming.devices[1].valid && norm(incoming.devices[1].p-physical.p)<1e-9 &&
+                      std::abs(dot(incoming.devices[1].q,physical.q))>1-1e-9,"Restoration moved incoming wrist constraints");
+            }
+            // Legacy files preserve learned offsets, but cannot invent the raw
+            // reference which was never saved. One full alignment upgrades it.
+            std::ifstream completeFile(path);std::string complete((std::istreambuf_iterator<char>(completeFile)),{});completeFile.close();
+            auto legacy=complete.substr(0,complete.find("REFERENCE "));legacy.replace(0,16,"KF_CALIBRATION_1");
+            {std::ofstream f(path);f<<legacy;}
+            check(loadCalibration(path,loaded,restoredSettings,&known) && known,"Legacy offsets were not retained");
+            saved.remember(loaded);
+            check(!loaded.rawReferenceValid && !saved.confirm(vr).valid && saved.confirm(vr).reason.find("once")!=std::string::npos,
+                  "Legacy coordinates were rebound without the missing reference");
+            {std::ofstream f(path);f<<complete.substr(0,complete.find("REFERENCE "));}
+            check(!loadCalibration(path,loaded,restoredSettings),"Truncated version-2 reference was accepted");
+            {std::ofstream f(path);f<<complete.substr(0,complete.find("REFERENCE "))<<"REFERENCE 1 2 0 0 0 0 0 0 1234 50\n";}
+            check(!loadCalibration(path,loaded,restoredSettings),"Non-rigid saved reference was accepted");
+            auto unknown=accepted;unknown.referenceSource=0;unknown.rawEpoch=0;saved.remember(unknown);
+            otherSource=vr;otherSource.referenceSource=0;
+            check(!saved.confirm(otherSource).valid,"Unknown source identity allowed cross-session restoration");
+            otherSource.epoch=0;
+            check(!saved.confirm(otherSource).valid,"Unknown source was accepted because zero epochs matched");
+            // A source change is a history barrier even if a provider failed to
+            // change its session counter. Never interpolate unrelated rooms.
+            PoseHistory poses;vr.host=10;poses.add(vr);otherSource=vr;otherSource.host=10.02;otherSource.referenceSource++;
+            poses.add(otherSource);check(!poses.at(10.01),"Pose interpolation crossed tracking sources");
+        }
+        {
+            VrReferenceHistory history;VrSample vr;vr.host=100;Calibration cal;
+            history.add(vr,cal,false);vr.host+=.01;history.add(vr,cal,false);
+            check(history.size()==1,"Reference diagnostics oversampled unchanged state");
+            vr.referenceEvents=VrStandingReset;history.add(vr,cal,false);
+            check(history.size()==2,"Reference diagnostics lost a between-frame event");
+            vr.referenceEvents=0;vr.host+=.01;vr.devices[0].valid=true;history.add(vr,cal,false);
+            check(history.size()==3,"Reference diagnostics lost tracking validity transition");
+            vr.host+=.01;vr.standingToRaw.t.x=1;history.add(vr,cal,false);
+            check(history.size()==4,"Reference diagnostics lost coordinate change");
+            for(int i=0;i<700;++i){vr.host+=.3;history.add(vr,cal,false);}
+            check(history.size()==600,"Reference diagnostics memory is unbounded");
+            std::ostringstream csv;history.write(csv);auto text=csv.str();
+            check(std::count(text.begin(),text.end(),'\n')==601 && text.find("saved_standing_to_raw_qw")!=std::string::npos,
+                  "Reference diagnostics omitted saved geometry or rows");
         }
         std::filesystem::remove(path);
         std::cout<<checks<<" controller calibration and motor limit checks passed. No hardware moved.\n";

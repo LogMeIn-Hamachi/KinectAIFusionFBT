@@ -1,5 +1,6 @@
 #include "vr_overlay.hpp"
 #include "alignment.hpp"
+#include "runtime_lifetime.hpp"
 #include <chrono>
 #include <Windows.h>
 #include <objidl.h>
@@ -119,12 +120,15 @@ struct VrOverlay::Impl {
         }
     }
 
-    bool ensureOverlay() {
+    void syncRuntime() {
         const auto token=vr::VR_GetInitToken();
         if(token!=runtimeToken_) {
             runtimeToken_=token;handle_=vr::k_ulOverlayHandleInvalid;visible_=false;
             refresh_.reset();texture_.Reset();context_.Reset();device_.Reset();
         }
+    }
+    bool ensureOverlay() {
+        syncRuntime();
         if (!vr::VRSystem() || !vr::VROverlay()) {lastError_="SteamVR interfaces unavailable";handle_=vr::k_ulOverlayHandleInvalid;visible_=false;return false;}
         if (handle_ != vr::k_ulOverlayHandleInvalid) {
             vr::EVROverlayError status=vr::VROverlayError_None;
@@ -157,6 +161,7 @@ struct VrOverlay::Impl {
     }
 
     void hide() {
+        syncRuntime();
         if (hidePending_ && handle_ != vr::k_ulOverlayHandleInvalid && vr::VROverlay()) {
             vr::VROverlay()->HideOverlay(handle_);
         }
@@ -369,8 +374,7 @@ struct VrOverlay::Impl {
             bool moving = (state.leftStatus.find("moving") != std::string::npos ||
                            state.rightStatus.find("moving") != std::string::npos);
 
-            int minSamples = std::min(state.leftSamples, state.rightSamples);
-            float sampleFraction = std::clamp(float(minSamples) / 12.0f, 0.05f, 1.0f);
+            float sampleFraction = std::clamp(float(state.progressPercent) / 100.0f, 0.0f, 1.0f);
 
             bool alert = (leftOccluded || rightOccluded || moving);
             Gdiplus::Color bgColor = alert ? Gdiplus::Color(255, 48, 32, 14) : Gdiplus::Color(255, 14, 46, 26);
@@ -389,14 +393,14 @@ struct VrOverlay::Impl {
                 captTitle = L"\u26A0 KINECT CANNOT SEE WRISTS \u2014 ADJUST POSITION";
                 captSub = L"Hold controllers slightly forward and clear of your body so the Kinect camera can see wrists.";
             } else if (moving) {
-                captTitle = L"\u26A0 MOVEMENT DETECTED \u2014 HOLD STILL (" + std::to_wstring(minSamples) + L"/12 samples)";
+                captTitle = L"\u26A0 MOVEMENT DETECTED \u2014 HOLD STILL";
                 captSub = L"Pause and hold hands completely steady in position.";
-            } else if (state.secondsRemaining <= 0 && minSamples < 12) {
-                captTitle = L"KEEP HOLDING STILL \u2014 FINALIZING SAMPLES (" + std::to_wstring(minSamples) + L"/12)";
-                captSub = L"Waiting for enough steady wrist measurements; the pose may take longer.";
+            } else if (state.secondsRemaining <= 0) {
+                captTitle = L"KEEP BOTH WRISTS VISIBLE \u2014 FINAL CHECK";
+                captSub = L"Waiting for fresh, steady measurements from both wrists.";
             } else {
-                captTitle = L"HOLD STILL \u2014 CAPTURING WRISTS (" + std::to_wstring(minSamples) + L"/12 samples)";
-                captSub = L"Left: " + std::to_wstring(state.leftSamples) + L"/12 \u2022 Right: " + std::to_wstring(state.rightSamples) + L"/12 steady samples recorded.";
+                captTitle = L"HOLD STILL \u2014 CAPTURING WRISTS";
+                captSub = L"About " + std::to_wstring(state.secondsRemaining) + L" seconds of steady observations remaining.";
             }
 
             g.DrawString(captTitle.c_str(), -1, &bannerTitleFont,
@@ -421,7 +425,9 @@ struct VrOverlay::Impl {
             drawRoundedRect(g, Gdiplus::Pen(Gdiplus::Color(0,0,0,0)), barBg, barX, barY, barW, barH, 9);
 
             Gdiplus::SolidBrush fillBrush(textColor);
-            drawRoundedRect(g, Gdiplus::Pen(Gdiplus::Color(0,0,0,0)), fillBrush, barX, barY, barW * sampleFraction, barH, 9);
+            if(sampleFraction>0)
+                drawRoundedRect(g, Gdiplus::Pen(Gdiplus::Color(0,0,0,0)), fillBrush, barX, barY, barW * sampleFraction, barH,
+                                std::min(9.f,barW*sampleFraction/2));
         } else {
             // Settling state (3s countdown)
             Gdiplus::SolidBrush settleBg(Gdiplus::Color(255, 48, 38, 14));
@@ -451,6 +457,7 @@ struct VrOverlay::Impl {
     }
 
     void update(const OverlayState& state) {
+        syncRuntime();
         if (!state.active) {
             hide();
             return;
@@ -488,15 +495,20 @@ struct VrOverlay::Impl {
 };
 
 VrOverlay::VrOverlay() : impl_(std::make_unique<Impl>()) {}
-VrOverlay::~VrOverlay() = default;
+VrOverlay::~VrOverlay() {
+    auto lifetime=openVrLifetime.read();
+    impl_.reset();
+}
 
 void VrOverlay::update(const OverlayState& state) {
     std::lock_guard lock(mutex_);
+    auto lifetime=openVrLifetime.read();
     if (impl_) impl_->update(state);
 }
 
 void VrOverlay::hide() {
     std::lock_guard lock(mutex_);
+    auto lifetime=openVrLifetime.read();
     if (impl_) impl_->hide();
 }
 

@@ -1,38 +1,48 @@
 #include "engine.hpp"
 #include <iostream>
 using namespace kf;
-int main(int argc, char **argv) {
+int main() {
+    const auto root=std::filesystem::temp_directory_path()/("kf-offline-lifecycle-"+std::to_string(now()));
+    const auto broken=root/"broken.kfr",valid=root/"synthetic.kfr";
     try {
-        auto root = std::filesystem::absolute(
-            argc > 1 ? argv[1] : std::filesystem::path(argv[0]).parent_path().string());
-        Engine engine(root);
-        for (int cycle = 0; cycle < 2; ++cycle) {
-            engine.start();
-            std::this_thread::sleep_for(std::chrono::milliseconds(150));
-            engine.stop();
-            auto s = engine.view();
-            if (s.running || s.output || s.recording)
-                throw std::runtime_error("Stop did not clear lifecycle flags");
-            if (s.sent)
-                throw std::runtime_error("Unexpected UDP output without alignment");
-        }
-        auto broken = root / "lifecycle-invalid-recording.kfr";
+        std::filesystem::create_directory(root);
+        {std::ofstream file(broken);file<<"invalid";}
         {
-            std::ofstream f(broken);
-            f << "invalid";
+            Engine engine(root); // Empty isolated root: no models, camera, preferences or GPU sessions.
+            for(int attempt=0;attempt<2;++attempt) {
+                engine.start(broken); // Nonempty replay path never enters camera/VR-input capture.
+                const double deadline=now()+3;
+                while(engine.view().running && now()<deadline)std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                auto state=engine.view();
+                if(state.running || state.output || state.recording || state.sent || state.notice.find("Press Start")==std::string::npos)
+                    throw std::runtime_error("Fatal capture error did not stop safely and allow restart");
+                engine.output(true);
+                if(engine.view().output)throw std::runtime_error("Stopped engine accepted output");
+                engine.stop();
+            }
+            auto config=std::make_shared<ReplayConfig>();config->settings.contacts=false;config->settings.constraints=false;
+            {RecordingWriter writer;writer.open(valid,"Synthetic empty frames; no camera data");
+                for(int i=0;i<30;++i){Frame frame;frame.host=frame.arrival=10+i/30.;frame.depthId=i;frame.runConfig=config;writer.write(frame);}}
+            engine.start(valid);
+            const double deadline=now()+3;
+            while(engine.view().frames==0 && engine.view().running && now()<deadline)
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            if(!engine.view().frames)throw std::runtime_error("Synthetic replay did not process");
+            auto settings=engine.view().settings;settings.contacts=true;settings.constraints=true;settings.baseline=1;
+            engine.settings(settings);
+            auto state=engine.view();
+            if(state.settings.contacts || state.settings.constraints || state.settings.baseline!=1)
+                throw std::runtime_error("Replay UI does not reflect recorded controls and explicit comparison override");
+            engine.output(true);
+            if(engine.view().output || engine.view().sent)throw std::runtime_error("Replay enabled tracking output");
+            engine.stop();
+            if(engine.view().running || engine.view().replay)throw std::runtime_error("Stop retained running/replay state");
         }
-        engine.start(broken);
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        engine.stop();
-        auto s = engine.view();
-        if (s.sent || s.running)
-            throw std::runtime_error("Corrupt replay escaped lifecycle handling");
-        std::filesystem::remove(broken);
-        std::cout << "3 native lifecycle scenarios passed: cancel initialization, restart, corrupt replay. "
-                     "Zero OSC packets.\n";
+        std::filesystem::remove(broken);std::filesystem::remove(valid);std::filesystem::remove(root);
+        std::cout<<"Offline engine checks passed: fatal error, restart, output refusal and replay controls. No camera, GPU inference or tracker output.\n";
         return 0;
-    } catch (const std::exception &e) {
-        std::cerr << e.what() << '\n';
-        return 1;
+    } catch(const std::exception& e) {
+        std::filesystem::remove(broken);std::filesystem::remove(valid);std::filesystem::remove(root);
+        std::cerr<<e.what()<<'\n';return 1;
     }
 }

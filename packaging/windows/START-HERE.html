@@ -4,7 +4,7 @@
 <style>
 body{margin:0;background:#101820;color:#eaf1f5;font:17px/1.65 system-ui,Segoe UI,sans-serif}main{max-width:860px;margin:auto;padding:56px 28px 80px}h1{font-size:44px;line-height:1.15;margin:12px 0}h2{font-size:24px;margin-top:36px}a{color:#75dec4}small,.muted{color:#adbdcb}.tag{letter-spacing:.12em;text-transform:uppercase;color:#75dec4;font-size:13px}.card{padding:20px 25px;background:#1a2935;border-radius:12px;margin:24px 0}.steps{padding-left:28px}.steps li{padding:9px 0 9px 8px}strong{color:#fff}code{background:#243746;border-radius:4px;padding:2px 6px}footer{margin-top:45px;border-top:1px solid #304353;padding-top:20px;font-size:14px}
 </style><main>
-<div class="tag">v1.2.0 Release · Windows x64 · NVIDIA</div>
+<div class="tag">v1.2.2 Release · Windows x64 · NVIDIA</div>
 <h1>Your Kinect, in SteamVR.</h1>
 <p class="muted">Waist and foot tracking with Kinect v1/v2, Fast SAM 3D Body and depth. Everything is processed on your PC.</p>
 <div class="card"><strong>Extract the entire ZIP first.</strong><br>Put it in a folder you can write to, keep the files together, and open <code>KinectRGBD.exe</code>. Models and native runtimes are already included.</div>
@@ -19,12 +19,12 @@ body{margin:0;background:#101820;color:#eaf1f5;font:17px/1.65 system-ui,Segoe UI
 <li><strong>Align to VR.</strong> Reset OVR space-drag/rotation offsets first. Follow the hand-position guide: hands at waist, hands apart, hands at chest, reach forward, then left high/right low. Take as long as you need, then squeeze either trigger or click Capture pose. A three-second countdown lets you settle. Keep the same normal grip.</li>
 <li><strong>Start tracking.</strong> Press Start trackers. Use Waist, Left Foot and Right Foot roles in SteamVR, then run VRChat's FBT calibration.</li>
 </ol>
-<div class="card"><strong>Next time</strong><br>With the camera and room unchanged, reset OVR offsets, Start, Lock player and Confirm saved alignment. After that you can space-drag or turn the playspace; all selected trackers should follow. Reset offsets again before confirming after an app restart. If SteamVR restarts during tracking, repeat Align to VR.</div>
+<div class="card"><strong>Next time</strong><br>Run Align to VR once after upgrading to this release, because older saves lack the original room reference. With the Kinect, physical room and headset connection unchanged, Start, Lock player and Confirm saved alignment. New saves preserve the original reference through app restarts and playspace movement. After a SteamVR restart, let tracking settle and confirm again. Check tracker placement before starting output; a moved camera, new room setup or shifted headset map still needs Align to VR.</div>
 <h2>Choose extra trackers</h2>
 <p>Hips and feet are always included. Use the <strong>Add: Knees / Elbows / Chest</strong> checkboxes beside Confirm saved alignment. Knees and elbows each add both sides. Leave all unchecked for the default three trackers. Pause output to change the selection, then start output and recalibrate FBT inside VRChat. Both SteamVR and OSC support the extras.</p>
 <h2>A simpler main screen</h2>
 <p>SAM optimized is selected by default. Model selection, SDK diagnostic comparisons, exposure and output options are under <strong>Advanced</strong>. Stop tracking before changing models. SAM original is included as an alternative.</p>
-<p>Version 1.2.0 adds optional trackers with simple checkboxes while retaining the original hips/feet tracking. Saved alignment after Quest tracking recovery remains a known issue: if trackers appear displaced, run a fresh Align to VR. Recent overlay changes still need broader live validation. Single-camera occlusion, side-on and lying poses remain difficult.</p>
+<p>This release repairs saved calibration-reference persistence and adds numeric VR-reference diagnostics. It does not guarantee recovery from an unreported headset-map shift; live tracker placement after resume still needs verification. Recent overlay changes still need broader live validation. Single-camera occlusion, side-on and lying poses remain difficult.</p>
 <h2>Need a hand?</h2>
 <p>Read <a href="README.md">the full guide</a>, <a href="docs/TROUBLESHOOTING.md">troubleshooting</a> or <a href="docs/RELEASE-NOTES.md">release notes</a>. These are plain text documents and can also be opened in Notepad.</p>
 <p>To move the app, close it and SteamVR, run <code>Remove SteamVR Trackers.cmd</code> in the old folder, move the complete folder, then install the trackers again from the new location. Back up calibration and recordings before deleting an old installation.</p>

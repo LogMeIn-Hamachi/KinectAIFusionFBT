@@ -152,6 +152,7 @@ std::shared_ptr<Frame> KinectCapture::poll() {
     if (!p_ || !p_->sensor)
         return {};
     auto &s = *p_;
+    const double captureStart=now();
     auto read = [&](HANDLE stream, int pixelSize) -> std::optional<ImagePart> {
         NUI_IMAGE_FRAME f{};
         HRESULT hr = s.sensor->NuiImageStreamGetNextFrame(stream, 0, &f);
@@ -277,6 +278,7 @@ std::shared_ptr<Frame> KinectCapture::poll() {
         }
     }
     s.lastFrame = now();
+    f->captureMs=(s.lastFrame-captureStart)*1000;
     return f;
 }
 std::string KinectCapture::calibrationKey() const {

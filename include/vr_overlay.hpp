@@ -11,6 +11,7 @@ struct OverlayState {
     int step{0};               // 0 to 4
     int retrySeconds{};
     int secondsRemaining{0};   // Settle or capture seconds
+    int progressPercent{};     // Collector's count, observation span and freshness gate.
     bool waitingForReady{false};
     bool collecting{false};    // true = holding still during capture
     bool done{false};          // true = finished all poses
@@ -20,8 +21,8 @@ struct OverlayState {
     std::string instruction;   // Current pose instruction
     std::string feedback;      // Error / detail feedback
     std::string agreement;     // Final agreement stats
-    int leftSamples{0};        // Samples recorded for left controller (0..12)
-    int rightSamples{0};       // Samples recorded for right controller (0..12)
+    int leftSamples{0};        // Accepted observations; twelve is only the count minimum.
+    int rightSamples{0};
     std::string leftStatus;    // "collecting steady samples", "Kinect cannot see wrist", etc.
     std::string rightStatus;
     bool leftTrigger{false};

@@ -13,5 +13,9 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Native build failed' }
     & ctest --preset release
     if ($LASTEXITCODE -ne 0) { throw 'Native tests failed' }
+    if (-not $CoreOnly) {
+        & ./build/Release/kf_lifecycle.exe
+        if ($LASTEXITCODE -ne 0) { throw 'Offline engine lifecycle checks failed' }
+    }
     if (-not $CoreOnly) { Write-Host 'Build passed. Run scripts/prepare_runtime.py to assemble a runnable app.' }
 } finally { Pop-Location }

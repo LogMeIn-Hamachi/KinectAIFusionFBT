@@ -473,6 +473,16 @@ int main() {
         runConfig->selectedId = 7;
         runConfig->settings.soleOffset = .08;
         runConfig->calibration.transform.t = {.1, .2, .3};
+        runConfig->calibration.valid=true;
+        VrSample origin;origin.epoch=3;origin.rawTransformValid=true;
+        origin.referenceSource=42;origin.referenceUniverse=19;origin.referenceEvents=VrStandingReset;
+        origin.standingToRaw={axisAngle({0,1,0},.25),{.1,0,.2}};
+        bindTrackingReference(runConfig->calibration,origin);
+        f.vr=origin;f.vr.standingToRaw.t.x+=1.;
+        f.vr.devices[1]={{-.5,1,2},{},true};
+        const auto liveController=calibrationVr(f.vr,runConfig->calibration).devices[1].p;
+        runConfig->lengths[0]=.22;runConfig->lengthsCaptured=true;
+        f.enqueuedHost=12345;
         f.runConfig = runConfig;
         f.rgbId = 42;
         writer.write(f);
@@ -483,6 +493,13 @@ int main() {
         RecordingReader reader;
         reader.open(path);
         auto first = reader.next(), second = reader.next();
+        check(first->vr.referenceSource==0 && first->runConfig->calibration.referenceSource==0 &&
+              first->vr.referenceEvents==0,"Recording persisted live identity metadata inconsistently");
+        check(first->vr.rawTransformValid && first->runConfig->calibration.rawReferenceValid &&
+                  first->runConfig->calibration.rawEpoch==3 && first->runConfig->lengthsCaptured &&
+                  first->runConfig->lengths[0]==.22 && first->enqueuedHost==0 &&
+                  norm(calibrationVr(first->vr,first->runConfig->calibration).devices[1].p-liveController)<1e-10,
+              "Replay lost physical reference, OVR movement or captured proportions");
         check(first->runConfig && first->runConfig->selectedId == 7 &&
                   first->runConfig->settings.soleOffset == .08 &&
                   first->runConfig->calibration.transform.t.z == .3,

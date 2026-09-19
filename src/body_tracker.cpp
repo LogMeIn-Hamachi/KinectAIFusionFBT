@@ -10,7 +10,8 @@ PosePrior BodyTracker::update(const PosePrior& input,uint32_t id,const Frame& f,
     const auto vr=calibrationVr(f.vr,cal);
     const double time=f.host;
     if(!id || !std::isfinite(time)){reset();return {};}
-    if(id_!=id || (host_ && (time<=host_ || time-host_>.3)))reset();
+    if(id_!=id)reset();
+    else if(host_ && (time<=host_ || time-host_>.3))resetHistory();
     const double dt=host_?time-host_:1./30.;id_=id;host_=time;
     if(input.selectedId!=id || std::abs(input.host-time)>.001 || !input.articulationValid ||
        !usable(input,Hip) || !usable(input,Neck) || !usable(input,LHip) || !usable(input,RHip))return {};
@@ -80,7 +81,7 @@ PosePrior BodyTracker::update(const PosePrior& input,uint32_t id,const Frame& f,
     // the pelvis from headset position, neck length, or gaze.
     std::array<V3,3> vrTargets{};std::array<bool,3> vrValid{};
     std::array<int,3> vrJoints{Head,LWrist,RWrist};
-    if(vrEpoch_ && vr.epoch && vrEpoch_!=vr.epoch){reset();return {};}
+    if(vrEpoch_ && vr.epoch && vrEpoch_!=vr.epoch){resetHistory();return {};}
     if(vr.epoch)vrEpoch_=vr.epoch;
     if(!cal.valid || (anchorCalibrationReady_ &&
        (norm(cal.transform.t-anchorCalibration_.t)>1e-6 || std::abs(dot(cal.transform.q,anchorCalibration_.q))<.999999))) {
@@ -147,7 +148,7 @@ PosePrior BodyTracker::update(const PosePrior& input,uint32_t id,const Frame& f,
         double length=norm(input.points[a]-input.points[b]);
         if(length<.025 || length>.85)continue;
         auto& samples=lengthSamples_[i];
-        if(samples.size()<31 && time-started_<1.2){samples.push_back(length);lengths_[i]=median(samples);}
+        if(!capturedLengths_ && samples.size()<31 && time-started_<1.2){samples.push_back(length);lengths_[i]=median(samples);}
     }
     for(int j=0;j<J;++j)if(input.available[j]) {
         previousLocal_[j]=local[j];

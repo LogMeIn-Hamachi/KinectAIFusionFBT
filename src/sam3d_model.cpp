@@ -99,13 +99,13 @@ void Sam3dModel::load(const std::filesystem::path &path,const std::filesystem::p
 Sam3dPrediction Sam3dModel::infer(const Frame &frame,Crop crop,const Sam3dCamera &camera) {
     if(!ready() || !camera.valid) throw std::runtime_error("SAM model/camera is not ready");
     double start=now();
-    auto image=sam3dImage(frame,crop);
+    sam3dImage(frame,crop,image_);
     timings_[0]=(now()-start)*1000;start=now();
     float center[]{float(crop.cx),float(crop.cy)},scale[]{float(crop.w),float(crop.h)};
     auto intrinsics=camera.intrinsics;
     auto memory=Ort::MemoryInfo::CreateCpu(OrtArenaAllocator,OrtMemTypeDefault);
     std::array<int64_t,4> shape{1,3,512,512};
-    auto input=Ort::Value::CreateTensor<float>(memory,image.data(),image.size(),shape.data(),shape.size());
+    auto input=Ort::Value::CreateTensor<float>(memory,image_.data(),image_.size(),shape.data(),shape.size());
     binding_->BindInput("image",input);
     session_->Run(Ort::RunOptions{nullptr},*binding_);
     timings_[1]=(now()-start)*1000;start=now();

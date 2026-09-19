@@ -41,11 +41,19 @@ int main() {
         }
         {
             TrackingHealth health;State state;
+            ProcessingHistory history;
+            for(int i=0;i<200;++i){ProcessingTiming t;t.workerMs=i;history.add(t);}
+            check(history.size()==180 && history.workerPercentile(.5)==110 && history.workerPercentile(.95)==191,
+                  "Bounded timing history or percentiles incorrect");
+            history.clear();check(history.size()==0 && history.workerPercentile(.95)==0,"Old timing samples survived restart");
             for(int i=0;i<61;++i) {health.inferred(1+i/30.);health.snapshot(1+i/30.,20);}
             check(std::abs(health.snapshot(3,20).neuralHz-30)<.01,"Actual neural rate incorrect");
             auto stalled=health.snapshot(3,20);stalled.age(6);
             check(stalled.neuralHz==0 && stalled.neuralAgeMs==3000,"Stalled camera GUI retained fresh neural stats");
             check(health.snapshot(6,20).neuralHz==0,"Stopped inference still displayed a live rate");
+            health.inferred(7.,6.95);auto ages=health.snapshot(7.02,20);
+            check(std::abs(ages.neuralAgeMs-20)<1e-8 && std::abs(ages.sourceAgeMs-70)<1e-8,
+                  "Inference completion age was confused with source-image age");
             state.trackers[0].valid=true;state.learnedPosition[0]=true;
             health.frame(false,false,false,state);
             health.frame(true,false,false,state);

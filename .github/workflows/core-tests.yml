@@ -13,3 +13,6 @@ jobs:
       - name: Build and test without camera, GPU or model downloads
         shell: pwsh
         run: ./scripts/build.ps1 -Bootstrap -CoreOnly
+      - name: Test driver update and rollback without SteamVR
+        shell: pwsh
+        run: ./tests/driver_update.ps1

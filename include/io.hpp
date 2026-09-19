@@ -79,6 +79,7 @@ class RecordingReader {
     void close() { stream_.close(); }
 };
 void saveCalibration(const std::filesystem::path &, const Calibration &, const Settings &,bool learnedOffsets=false);
+std::optional<std::string> trySaveCalibration(const std::filesystem::path &, const Calibration &, const Settings &,bool learnedOffsets=false);
 bool loadCalibration(const std::filesystem::path &, Calibration &, Settings &,bool* learnedOffsets=nullptr);
 void saveBgraBmp(const std::filesystem::path &, const Frame &);
 } // namespace kf

@@ -252,7 +252,8 @@ double ClockMap::map(std::int64_t ms, double arrival) {
     return std::min(arrival, ms * 0.001 + offset);
 }
 void PoseHistory::add(VrSample p) {
-    if (!poses_.empty() && (p.host <= poses_.back().host || p.epoch != poses_.back().epoch))
+    if (!poses_.empty() && (p.host <= poses_.back().host || p.epoch != poses_.back().epoch ||
+                           p.referenceSource != poses_.back().referenceSource))
         poses_.clear();
     poses_.push_back(p);
     while (poses_.size() > 300 || (!poses_.empty() && p.host - poses_.front().host > 3))
@@ -266,7 +267,7 @@ std::optional<VrSample> PoseHistory::at(double host) const {
     for (size_t i = 1; i < poses_.size(); ++i)
         if (poses_[i].host >= host) {
             auto a = poses_[i - 1], b = poses_[i];
-            if (b.host - a.host > 0.04 || a.epoch!=b.epoch)
+            if (b.host - a.host > 0.04 || a.epoch!=b.epoch || a.referenceSource!=b.referenceSource)
                 return {};
             double t = (host - a.host) / (b.host - a.host);
             a.host = host;

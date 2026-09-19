@@ -1,6 +1,6 @@
 # Agent handoff
 
-Read README.md, docs/development/BUILD.md and docs/development/HANDOFF.md before changing tracking. This is a native Windows C++20 project; no particular AI editor or service is required. The accepted baseline is v1.0.1.
+Read README.md, docs/development/BUILD.md and docs/development/HANDOFF.md before changing tracking. This is a native Windows C++20 project; no particular AI editor or service is required. The latest accepted public baseline is v1.2.0; VERSION identifies the current development build.
 
 - Preserve camera-led SAM articulation, independent depth-supported foot contact, and the small bounded horizontal controller correction. Continuous headset-to-hip anchoring was deliberately removed. Head gaze must not move feet.
 - Calibration is controller-only, learns wrist offsets, waits for user readiness on every pose and validates against a separate holdout pose. Proportions have an eight-second preparation countdown. An in-headset SteamVR visual overlay guides alignment with 3D poses and retry screens.

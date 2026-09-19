@@ -127,7 +127,7 @@ void RecordingWriter::open(const std::filesystem::path &p, const std::string &me
     stream_.open(p, std::ios::binary | std::ios::trunc);
     if (!stream_)
         throw std::runtime_error("Cannot create recording");
-    stream_.write("KFRGBD02", 8);
+    stream_.write("KFRGBD03", 8);
     Bytes b;
     b.array(std::vector<uint8_t>(metadata.begin(), metadata.end()));
     writeRecord(stream_, b);
@@ -185,6 +185,8 @@ void RecordingWriter::write(const Frame &f) {
         b.quat(d.q);
         b.put<uint8_t>(d.valid);
     }
+    b.quat(f.vr.standingToRaw.q);b.vec(f.vr.standingToRaw.t);
+    b.put<uint8_t>(f.vr.rawTransformValid);
     b.put<uint8_t>(bool(f.runConfig));
     if (f.runConfig) {
         const auto &c = *f.runConfig;
@@ -204,9 +206,12 @@ void RecordingWriter::write(const Frame &f) {
         b.put(c.calibration.rms);
         b.put(c.calibration.p95);
         b.put(c.calibration.spread);
+        b.quat(c.calibration.standingToRaw.q);b.vec(c.calibration.standingToRaw.t);
+        b.put(c.calibration.rawEpoch);b.put<uint8_t>(c.calibration.rawReferenceValid);
         b.put(c.selectedId);
         for (auto length : c.lengths)
             b.put(length);
+        b.put<uint8_t>(c.lengthsCaptured);
         b.array(std::vector<uint8_t>(c.modelHash.begin(), c.modelHash.end()));
     }
     writeRecord(stream_, b);
@@ -223,9 +228,9 @@ void RecordingReader::open(const std::filesystem::path &p) {
     stream_.open(p, std::ios::binary);
     char magic[8]{};
     stream_.read(magic, 8);
-    if (!stream_ || (std::memcmp(magic, "KFRGBD01", 8) && std::memcmp(magic, "KFRGBD02", 8)))
+    if (!stream_ || std::memcmp(magic, "KFRGBD0", 7) || magic[7]<'1' || magic[7]>'3')
         throw std::runtime_error("Not a supported Kinect RGB-D recording");
-    version_=magic[7]=='2'?2:1;
+    version_=magic[7]-'0';
     auto b = readRecord(stream_);
     if (!b)
         throw std::runtime_error("Missing recording metadata");
@@ -300,6 +305,11 @@ std::shared_ptr<Frame> RecordingReader::next() {
         if (!finite(d.p) || !std::isfinite(dot(d.q, d.q)))
             throw std::runtime_error("Invalid VR pose");
     }
+    if(version_>=3) {
+        f->vr.standingToRaw.q=b.quat();f->vr.standingToRaw.t=b.vec();
+        f->vr.rawTransformValid=b.get<uint8_t>()!=0;
+        if(!finiteRigid(f->vr.standingToRaw))throw std::runtime_error("Invalid recorded VR reference");
+    }
     if (b.get<uint8_t>()) {
         auto c = std::make_shared<ReplayConfig>();
         auto &s = c->settings;
@@ -321,9 +331,15 @@ std::shared_ptr<Frame> RecordingReader::next() {
         c->calibration.rms = b.get<double>();
         c->calibration.p95 = b.get<double>();
         c->calibration.spread = b.get<double>();
+        if(version_>=3) {
+            c->calibration.standingToRaw.q=b.quat();c->calibration.standingToRaw.t=b.vec();
+            c->calibration.rawEpoch=b.get<uint64_t>();c->calibration.rawReferenceValid=b.get<uint8_t>()!=0;
+            if(!finiteRigid(c->calibration.standingToRaw))throw std::runtime_error("Invalid recorded calibration reference");
+        }
         c->selectedId = b.get<uint32_t>();
         for (auto &length : c->lengths)
             length = b.get<double>();
+        if(version_>=3)c->lengthsCaptured=b.get<uint8_t>()!=0;
         auto hash = b.array<uint8_t>(64);
         c->modelHash.assign(hash.begin(), hash.end());
         if (s.baseline < 0 || s.baseline > 2 || !std::isfinite(s.soleOffset) || s.soleOffset < .02 ||
@@ -349,7 +365,7 @@ std::shared_ptr<Frame> RecordingReader::next() {
 }
 void saveCalibration(const std::filesystem::path &p, const Calibration &c, const Settings &s,bool learnedOffsets) {
     std::ofstream f(p.string() + ".tmp");
-    f << std::setprecision(17) << "KF_CALIBRATION_1\n"
+    f << std::setprecision(17) << "KF_CALIBRATION_2\n"
       << c.valid << ' ' << c.transform.q.w << ' ' << c.transform.q.x << ' ' << c.transform.q.y << ' '
       << c.transform.q.z << ' ' << c.transform.t.x << ' ' << c.transform.t.y << ' ' << c.transform.t.z << ' '
       << c.rms << ' ' << c.p95 << ' ' << c.spread << '\n';
@@ -357,12 +373,20 @@ void saveCalibration(const std::filesystem::path &p, const Calibration &c, const
         f << v.x << ' ' << v.y << ' ' << v.z << '\n';
     f << s.soleOffset << '\n';
     f << "WRIST_OFFSETS " << learnedOffsets << '\n';
+    f << "REFERENCE " << c.rawReferenceValid << ' ' << c.standingToRaw.q.w << ' '
+      << c.standingToRaw.q.x << ' ' << c.standingToRaw.q.y << ' ' << c.standingToRaw.q.z << ' '
+      << c.standingToRaw.t.x << ' ' << c.standingToRaw.t.y << ' ' << c.standingToRaw.t.z << ' '
+      << c.referenceSource << ' ' << c.referenceUniverse << '\n';
     f.close();
     if (!f)
         throw std::runtime_error("Cannot save calibration");
     if (!MoveFileExW(std::filesystem::path(p.string() + ".tmp").c_str(), p.c_str(),
                      MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
         throw std::runtime_error("Cannot replace calibration");
+}
+std::optional<std::string> trySaveCalibration(const std::filesystem::path& p,const Calibration& c,const Settings& s,bool learnedOffsets) {
+    try {saveCalibration(p,c,s,learnedOffsets);return std::nullopt;}
+    catch(const std::exception& e){return std::string(e.what());}
 }
 bool loadCalibration(const std::filesystem::path &p, Calibration &c, Settings &s,bool* learnedOffsets) {
     if(learnedOffsets)*learnedOffsets=false;
@@ -376,7 +400,7 @@ bool loadCalibration(const std::filesystem::path &p, Calibration &c, Settings &s
     for (auto &v : next.deviceOffsets)
         f >> v.x >> v.y >> v.z;
     f >> next.soleOffset;
-    if (!f || magic != "KF_CALIBRATION_1" || !finite(a.transform.t) || norm(a.transform.t) > 20 ||
+    if (!f || (magic != "KF_CALIBRATION_1" && magic != "KF_CALIBRATION_2") || !finite(a.transform.t) || norm(a.transform.t) > 20 ||
         std::abs(dot(a.transform.q, a.transform.q) - 1) > 0.001 ||
         !std::isfinite(dot(a.transform.q, a.transform.q)) || !std::isfinite(next.soleOffset) ||
         next.soleOffset < 0.02 || next.soleOffset > 0.2 || !std::isfinite(a.rms) || a.rms < 0 || a.rms > 1 ||
@@ -389,7 +413,18 @@ bool loadCalibration(const std::filesystem::path &p, Calibration &c, Settings &s
     bool accepted=a.valid;
     bool known=accepted && a.spread>=.07 && a.rms<calibrationMaxRms && norm(next.deviceOffsets[1])>.001 && norm(next.deviceOffsets[2])>.001;
     std::string marker;bool savedKnown{};
-    if(f>>marker>>savedKnown)known=marker=="WRIST_OFFSETS" && savedKnown;
+    const bool hasOffsets=bool(f>>marker>>savedKnown);
+    if(hasOffsets)known=marker=="WRIST_OFFSETS" && savedKnown;
+    if(magic=="KF_CALIBRATION_2") {
+        if(!hasOffsets || marker!="WRIST_OFFSETS")return false;
+        f>>marker>>a.rawReferenceValid>>a.standingToRaw.q.w>>a.standingToRaw.q.x
+         >>a.standingToRaw.q.y>>a.standingToRaw.q.z>>a.standingToRaw.t.x>>a.standingToRaw.t.y
+         >>a.standingToRaw.t.z>>a.referenceSource>>a.referenceUniverse;
+        if(!f || marker!="REFERENCE" || !finiteRigid(a.standingToRaw) || norm(a.standingToRaw.t)>100)return false;
+        // Runtime counters are never durable room identifiers. Loading always
+        // requires explicit restoration, retaining the serialized reference.
+        a.rawEpoch=0;
+    }
     if(learnedOffsets)*learnedOffsets=known && norm(next.deviceOffsets[1])<=.30 && norm(next.deviceOffsets[2])<=.30;
     a.valid = false;
     a.reason = "Saved transform loaded; verify current sensor and VR origin before enabling output";

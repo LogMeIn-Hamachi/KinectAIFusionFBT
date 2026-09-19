@@ -8,6 +8,7 @@ Crop sam3dCrop(double x1, double y1, double x2, double y2);
 // RGB CHW, [0,1]. Normalization belongs to the exported graph/reference model.
 // No image reflection or anatomical label conversion is performed here.
 std::vector<float> sam3dImage(const Frame &, Crop);
+void sam3dImage(const Frame &,Crop,std::vector<float>& output);
 // Preserve the source's full-image projection and unanchored camera-space 3D.
 // A model prediction is not an independently observed metric joint.
 struct Sam3dPrediction {

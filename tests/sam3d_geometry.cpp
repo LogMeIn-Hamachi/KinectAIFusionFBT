@@ -3,6 +3,19 @@
 using namespace kf;
 int main() {
     try {
+        {
+            Frame image;image.width=8;image.height=6;image.bgra.resize(8*6*4);
+            for(size_t i=0;i<image.bgra.size();++i)image.bgra[i]=uint8_t(i*37);
+            std::vector<float> reused;sam3dImage(image,{4,3,8,8},reused);
+            const auto storage=reused.data();
+            for(Crop crop: {Crop{4,3,8,8},Crop{0,0,16,16},Crop{40,40,8,8}}) {
+                auto expected=sam3dImage(image,crop);
+                std::fill(reused.begin(),reused.end(),-123.f);
+                sam3dImage(image,crop,reused);
+                if(reused!=expected || reused.data()!=storage)
+                    throw std::runtime_error("Reused SAM crop changed pixels, border padding or buffer ownership");
+            }
+        }
         ColorProjection projection;
         projection.valid=true;
         // Reflected Y camera, 2 cm horizontal baseline. A proper rotation

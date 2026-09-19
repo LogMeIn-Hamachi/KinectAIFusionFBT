@@ -1,4 +1,4 @@
-# KinectAIFusionFBT — v1.2.0
+# KinectAIFusionFBT — v1.2.2
 
 Full-body tracking for SteamVR using Kinect v1 or v2 and Fast SAM 3D Body. Native Windows x64; NVIDIA GeForce RTX 4000 or 5000 series GPU required (tested on Windows 11 with RTX 5070 Ti). Older RTX 20/30 series lack hardware FP8 and are not supported.
 
@@ -16,9 +16,9 @@ Open **START-HERE.html** for the setup guide. Extract the entire ZIP into a writ
 
 ## Everyday use and playspace movement
 
-If the camera and physical room setup have not changed: start SteamVR, reset OVR offsets, Start, Lock player, and **Confirm saved alignment**. Then Start trackers. Repeat Align to VR if the camera or physical tracking origin has changed.
+Run **Align to VR once after upgrading**: older saves lack the original coordinate reference. New saves preserve it across app restarts and playspace movement. Keep the Kinect, physical room and headset connection unchanged, then Start, Lock player and **Confirm saved alignment**. After a SteamVR restart, let tracking settle and confirm again. Check placement before enabling output.
 
-After confirming or aligning, OVR space drag and rotation should move waist and feet along with your headset/controllers. The app keeps a stable physical-room reference for tracking, while SteamVR applies virtual playspace movement. Reset OVR offsets again before confirming a saved alignment after restarting the app. If SteamVR restarts while the app is tracking, repeat Align to VR. This requirement avoids interpreting an active virtual offset as the original calibrated room.
+OVR space drag and rotation should move all selected trackers with the headset/controllers. Reset OVR offsets before a fresh alignment; new saved references do not need rebinding to today's standing origin. A moved Kinect, new room setup or unreported headset-map shift still needs fresh alignment.
 
 ## Choose extra trackers
 
@@ -26,7 +26,7 @@ Hips and feet are always included. Beside Confirm saved alignment, tick **Add: K
 
 Extra joint positions and rotations are estimates; visibility and occlusion affect quality. Existing hips/feet tracking and smoothing are retained.
 
-**Known saved-alignment issue:** after Quest tracking resumes, Confirm saved alignment can accept a transform that places trackers incorrectly. This release does not fix that issue. If trackers are displaced, use a fresh Align to VR before VRChat FBT calibration.
+**Validation limit:** saved-reference persistence is repaired and covered by offline regression tests. Full Quest sleep/resume recovery has not yet been verified. If trackers remain displaced, click Diagnostics and run Align to VR before using output.
 
 ## What is included
 

@@ -1,4 +1,5 @@
 #include "engine.hpp"
+#include "build_version.hpp"
 #include <Windows.h>
 #include <commctrl.h>
 #include <commdlg.h>
@@ -297,6 +298,10 @@ void paint() {
         text(dc, 40, 641, 1100, 28,
              L"Use RGB-D fusion for normal tracking. Sole distance is measured below the ankle; default 0.075 m.",
              RGB(164,185,202),smallFont);
+        text(dc,40,532,1110,38,s.replay?
+             L"Replay uses recorded geometry settings. Only comparison mode and extra tracker choices can be changed; AI runs on every frame.":
+             L"Diagnostic controls: disabling Depth / SAM body selects the SDK path. SDK bone fit affects SDK joints only.",
+             RGB(164,185,202),smallFont);
     }
     BitBlt(screen, 0, 0, client.right, client.bottom, dc, 0, 0, SRCCOPY);
     SelectObject(dc, old);
@@ -416,8 +421,8 @@ LRESULT CALLBACK procedure(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
             for (auto name : {L"Auto (GPU adaptive)", L"30 Hz (Full AI)", L"20 Hz (Balanced)", L"15 Hz (Low GPU / Heavy VRChat)"})
                 SendMessageW(cadenceBox, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name));
             SendMessageW(cadenceBox, CB_SETCURSEL, engine->view().cadenceChoice, 0);
-            control(L"BUTTON", L"Registered depth", DepthToggle, 40, 452, 210, 30, BS_AUTOCHECKBOX);
-            control(L"BUTTON", L"Bone constraints", ConstraintToggle, 265, 452, 210, 30, BS_AUTOCHECKBOX);
+            control(L"BUTTON", L"Depth / SAM body", DepthToggle, 40, 452, 210, 30, BS_AUTOCHECKBOX);
+            control(L"BUTTON", L"SDK bone fit", ConstraintToggle, 265, 452, 210, 30, BS_AUTOCHECKBOX);
             control(L"BUTTON", L"Foot contact", ContactToggle, 490, 452, 180, 30, BS_AUTOCHECKBOX);
             control(L"BUTTON", L"VR constraints", VrToggle, 685, 452, 190, 30, BS_AUTOCHECKBOX);
             control(L"BUTTON", L"Apply offsets", SaveOffsets, 675, 317, 160, 32);
@@ -438,6 +443,19 @@ LRESULT CALLBACK procedure(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
                 }
             }
             auto s = engine->view();
+            for(auto [controlId,checked]:{std::pair{DepthToggle,s.settings.depth},
+                    {ConstraintToggle,s.settings.constraints},{ContactToggle,s.settings.contacts},{VrToggle,s.settings.vrConstraints}}) {
+                const auto h=GetDlgItem(window,controlId);
+                const auto mark=checked?BST_CHECKED:BST_UNCHECKED;
+                if(SendMessageW(h,BM_GETCHECK,0,0)!=mark)SendMessageW(h,BM_SETCHECK,mark,0);
+                enableIfChanged(h,!s.replay && !s.collecting && !s.bodyCollecting);
+            }
+            enableIfChanged(cadenceBox,!s.replay);
+            enableIfChanged(GetDlgItem(window,SaveOffsets),!s.replay && !s.collecting && !s.bodyCollecting);
+            for(int i=0;i<9;++i)enableIfChanged(GetDlgItem(window,OffsetBase+i),!s.replay && !s.collecting && !s.bodyCollecting);
+            enableIfChanged(GetDlgItem(window,SoleOffset),!s.replay && !s.collecting && !s.bodyCollecting);
+            enableIfChanged(modeBox,!s.collecting && !s.bodyCollecting);
+            enableIfChanged(GetDlgItem(window,Output),s.running && !s.replay && !s.collecting && !s.bodyCollecting);
             if (s.collecting && s.calibrationSpeech != lastSpokenPrompt) {
                 lastSpokenPrompt = s.calibrationSpeech;
                 if (calibrationVoice)
@@ -673,7 +691,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     RECT r{0, 0, 1224, 850};
     AdjustWindowRect(&r, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, FALSE);
     auto window =
-        CreateWindowW(wc.lpszClassName, L"Kinect RGB-D — Experimental full-body tracking (v1.2.0)",
+        CreateWindowW(wc.lpszClassName, wide("Kinect RGB-D - Experimental full-body tracking (" KF_VERSION ")").c_str(),
                       WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
                       r.right - r.left, r.bottom - r.top, nullptr, nullptr, instance, nullptr);
     if (!window)

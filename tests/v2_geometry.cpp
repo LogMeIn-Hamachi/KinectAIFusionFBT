@@ -1,11 +1,20 @@
 #include "io.hpp"
 #include "sam3d_geometry.hpp"
+#include "legacy_recordings.hpp"
 #include <iostream>
 using namespace kf;
 void require(bool condition,const char* message){if(!condition)throw std::runtime_error(message);}
 int main() {
     auto path=std::filesystem::temp_directory_path()/("kf-v2-roundtrip-"+std::to_string(now())+".kfr");
     try {
+        for(auto hex:legacyRecordingHex) {
+            {std::ofstream out(path,std::ios::binary|std::ios::trunc);
+                for(size_t i=0;i<hex.size();i+=2)out.put(char(std::stoi(std::string(hex.substr(i,2)),nullptr,16)));}
+            RecordingReader reader;reader.open(path);auto legacy=reader.next();
+            require(legacy && legacy->host==10 && legacy->sensorVersion==1 && legacy->width==640 &&
+                    legacy->vr.epoch==3 && !legacy->vr.rawTransformValid && !reader.next(),
+                    "Legacy v1/v2 recordings must remain readable without invented references");
+        }
         Frame f;f.sensorVersion=2;f.width=1920;f.height=1080;f.depthWidth=512;f.depthHeight=424;
         f.host=f.arrival=10;f.captureMs=7;f.exposureMs=16;f.colorIntervalMs=33.3333;
         f.bgra.resize(1920*1080*4);f.depth.resize(512*424);f.mapping.resize(512*424);

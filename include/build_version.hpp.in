@@ -1,0 +1,3 @@
+#pragma once
+#define KF_VERSION "@KF_VERSION@"
+#define KF_SOURCE_REVISION "@KF_SOURCE_REVISION@"

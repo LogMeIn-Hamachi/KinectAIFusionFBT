@@ -16,13 +16,13 @@ By combining the **Fast SAM 3D Body** deep learning foundation model with high-s
 ## Highlights & Features
 
 - **Adaptive SteamVR Smoothing**: Position and rotation filtering runs with SteamVR updates and adjusts to observed movement. It approaches a fixed target without overshoot; live latency and tracking quality depend on camera rate, visibility and PC load.
-- **In-Headset SteamVR Calibration Guide**: A real-time visual guide renders directly in your headset during calibration. Body-and-hands diagrams, live countdowns, wrist tracking progress counters (`X/12`), and dedicated retry screens guide you through setup without having to take off your headset.
+- **In-Headset SteamVR Calibration Guide**: A visual guide renders in your headset during calibration. Body-and-hands diagrams, settling countdowns, progress based on accepted wrist observations, and retry screens guide you through setup.
 - **Fast SAM 3D Body Deep Learning**: Selective FP8 TensorRT backbone and native LibTorch C++ GPU decoder reconstruct full anatomical 3D joints from raw camera video in real time.
 - **High-Priority GPU Stream**: AI inference uses a dedicated high-priority CUDA stream. It still shares the GPU with VRChat.
 - **Adaptive Neural Cadence**: Auto / 30 Hz / 20 Hz / 15 Hz controls the rate of new AI estimates. Depth and foot contacts are processed on every delivered camera frame, including frames that reuse a recent AI estimate.
 - **Full Metric Depth & Ground-Plane Locking**: Automatically detects room floor tilt and locks soles to the floor to prevent floating or floor clipping.
 - **Playspace Move & Space Drag Support**: Seamlessly moves with OVR Advanced Settings playspace drag and rotation without losing calibration.
-- **Saved Alignment Memory**: Reuse an alignment when the camera and tracking origin still match. Known issue: Quest tracking recovery can leave saved alignment displaced; run a fresh **Align to VR** if trackers are offset.
+- **Saved Alignment Memory**: Saves the complete calibration reference and can restore it after a capture/SteamVR restart with the same headset connection. Camera and physical room must still match; see Everyday Use for upgrade requirements and limitations.
 
 ---
 
@@ -47,7 +47,7 @@ By combining the **Fast SAM 3D Body** deep learning foundation model with high-s
 3. Ensure **SteamVR** is installed and has been run at least once.
 
 ### 2. Installation
-1. Download all three **`KinectAIFusionFBT-v1.2.0-Windows-x64.zip`** parts from [Releases](https://github.com/LogMeIn-Hamachi/KinectAIFusionFBT/releases). Open `.zip.001` with 7-Zip to extract the complete folder. Existing users can use the smaller **AppUpdate.zip** instead; close the app and SteamVR before replacing files.
+1. Download all three **`KinectAIFusionFBT-v1.2.2-Windows-x64.zip`** parts from [Releases](https://github.com/LogMeIn-Hamachi/KinectAIFusionFBT/releases). Open `.zip.001` with 7-Zip to extract the complete folder. Existing users can use the smaller **AppUpdate.zip** instead; close the app and SteamVR before replacing files.
 2. Extract the ZIP into a permanent folder on your PC (e.g. `C:\Tools\KinectAIFusionFBT`).
 3. Make sure SteamVR is closed, then right-click **`Install SteamVR Trackers.cmd`** and select **Run as administrator** (or double-click it). This registers the virtual tracker driver with SteamVR.
 
@@ -80,12 +80,12 @@ This release requires its matching app, SteamVR driver and tracker profile. Rest
 1. Start SteamVR and put on your headset.
 2. Open **`KinectRGBD.exe`** and click **Start**.
 3. Stand in front of the camera so your body is visible in the preview window, select your body, and click **Lock player**.
-   *(Note: The very first launch prepares a local TensorRT GPU engine cache, which takes 30–60 seconds. Subsequent launches start instantly.)*
+   *(Note: The first model load prepares a local TensorRT GPU cache and can take a while. Later loads reuse it; startup time still depends on storage and GPU load.)*
 
 ### Step C: Body Proportions
 - Click **Capture proportions**.
 - An 8-second countdown will start: stand in a relaxed pose with your feet shoulder-width apart.
-- The app collects 4 seconds of bone length samples to fit your exact height and proportions.
+- The app collects 4 seconds of bone length samples to fit your proportions. Captured lengths survive brief tracking gaps and verified recovery of the same person. Capture again after restarting tracking or selecting a different person; proportions are not saved as a reusable person profile.
 
 ### Step D: VR Alignment (In-Headset Guide)
 - Reset any OVR Advanced Settings space drag offsets before aligning.
@@ -110,9 +110,10 @@ This release requires its matching app, SteamVR driver and tracker profile. Rest
 
 ## Everyday Use
 
-- **Saved Alignment**: As long as your Kinect has not been moved physically, you do **not** need to re-align every time!
+- **Saved Alignment (1.2.2)**: Run **Align to VR once after upgrading**. Older saves lack the original room reference; their learned wrist offsets are retained, but they cannot safely restore alignment. New saves retain that reference across capture and app restarts. Use the same headset and connection method, and leave the Kinect and physical room setup unchanged.
   - Start SteamVR $\to$ Launch `KinectRGBD.exe` $\to$ Click **Start** $\to$ **Lock player** $\to$ **Confirm saved alignment** $\to$ **Start trackers**.
-- **Brief headset removal**: If SteamVR retains the same tracking reference and the camera stays fixed, use **Confirm saved alignment** if confirmation is needed. Temporary unavailability asks you to wake SteamVR and retry. A genuine SteamVR restart or physical tracking-origin change during a running session requires a new alignment.
+- **Headset removal / SteamVR restart**: A runtime or universe change pauses output. Let tracking settle, then confirm the saved alignment. Confirmation restores the original reference rather than attaching the old coordinates to the new standing origin. It never starts output automatically. A source mismatch is rejected; return to the original connection or align again.
+- **Limits**: Confirmation checks saved metadata, not a fresh physical wrist measurement. Verify tracker placement after restoring. A moved Kinect, new room setup, or an unreported headset-map shift still needs **Align to VR**. The persistence bug is covered by offline tests; complete Quest resume recovery is not yet established by a live tracker-placement check.
 - **Playspace Movement**: Moving your playspace with OVR Advanced Settings space drag applies consistently to all selected trackers.
 
 ---
@@ -129,6 +130,8 @@ In the **Advanced** tab of `KinectRGBD.exe`:
   - If tracking seems to drop in and out, click **Diagnostics** after reproducing it. The report separates deliberate AI-result reuse from missing estimates, source switches and tracker validity losses. A temporarily untracked foot stays connected to SteamVR but has an invalid pose until it is observed again.
 - **Model Selection**: Switch between **SAM optimized** (fastest, FP8 + TF32) and **SAM original**.
 - **OSC Output**: Secondary VRChat output on `localhost:9000`. Uses the same adaptive position/rotation smoothing and bounded prediction as the SteamVR driver, with playspace movement applied after smoothing. Enable OSC in VRChat and select OSC output in the app, then enable output. Expired trackers stop sending updates; VRChat controls how long its last received pose remains visible. App-side smoothing is shared, but receiver timing and tracking-loss behavior can differ from native SteamVR.
+- **Diagnostic controls**: **Depth / SAM body** is required for the fitted SAM path. Turning it off selects an SDK-based comparison path and does not disable all AI work. **SDK bone fit** controls only SDK joint fitting; SAM retains its own body fit. Replay shows recorded geometry settings and disables those controls. Comparison mode and extra tracker selection remain available; replay runs AI on every frame, so it is not an Auto/cadence benchmark.
+- **Diagnostics**: Exports a short numbers-only processing history, including fresh/reused estimates, host call timings, depth supports and actual foot plant state. It also exports `vr-reference.csv`: recent VR events, poses, current/saved coordinate references and source keys for investigating resume problems. Source keys identify a headset connection, not a physical room. Host encoder/decoder durations are not isolated GPU kernel timings. No camera images are included.
 
 ---
 
@@ -139,7 +142,7 @@ In the **Advanced** tab of `KinectRGBD.exe`:
 - [Visual Studio 2022](https://visualstudio.microsoft.com/) with C++ desktop development workload (C++20 support)
 - [CMake 3.25+](https://cmake.org/download/)
 - [Git with Git LFS](https://git-lfs.com/)
-- [NVIDIA CUDA Toolkit 12.8](https://developer.nvidia.com/cuda-toolkit)
+- [NVIDIA CUDA Toolkit 12.9](https://developer.nvidia.com/cuda-toolkit) for development; the bundled PyTorch runtime uses CUDA 12.8.
 - Microsoft Kinect SDK 1.8 and/or SDK 2.0
 
 ### Build Steps
@@ -149,8 +152,9 @@ git clone https://github.com/LogMeIn-Hamachi/KinectAIFusionFBT.git
 cd KinectAIFusionFBT
 git lfs pull
 
-# 2. Configure and build via CMake
-cmake --preset windows-release
+# 2. First install the pinned dependencies and Torch environment from docs/development/BUILD.md.
+# Then configure and build via CMake.
+cmake --preset windows-x64
 cmake --build build --config Release
 
 # 3. Run the automated offline test suites (10/10 must pass)
@@ -173,8 +177,8 @@ ctest --test-dir build -C Release --output-on-failure
 <summary><b>My feet are clipping into the floor or floating</b></summary>
 
 1. Ensure the Kinect can clearly see the floor where you are standing.
-2. In `KinectRGBD.exe`, make sure **Floor Contacts** is checked.
-3. Adjust the **Floor height offset** in small 1 cm increments if your avatar uses high heels or shoes.
+2. In `KinectRGBD.exe`, make sure **Foot contact** is checked.
+3. **Ankle-to-sole distance** in Advanced is an anatomical distance in metres (default `0.075`), not a playspace height adjustment. Check camera alignment and VRChat's avatar calibration before changing it to compensate for avatar shoes.
 </details>
 
 <details>

@@ -18,6 +18,7 @@ class Sam3dModel {
     const char *(*error_)(){};
     void (*decoderTimings_)(void*,double*){};
     std::array<double,6> timings_{};
+    std::vector<float> image_;
   public:
     ~Sam3dModel();
     void load(const std::filesystem::path &, const std::filesystem::path &libraries);
