@@ -4,6 +4,16 @@ Kinect full-body tracking for **SteamVR and VRChat**, using Fast SAM 3D Body and
 
 **[Download the latest release](https://github.com/LogMeIn-Hamachi/KinectAIFusionFBT/releases/latest)**
 
+## How the tracking works
+
+**AI pose estimation with real depth:** Fast SAM 3D Body estimates your body pose from the colour camera. Kinect depth helps place that pose in physical space and supports foot contact with the floor. The AI drives body articulation, while a small, bounded controller correction helps horizontal alignment. Headset gaze does not drive your hips or feet.
+
+**NVIDIA acceleration:** The native C++20 app runs the optimized SAM image encoder through TensorRT with selective FP8 precision, and its body decoder on CUDA with TF32 acceleration. Intermediate model data stays on the GPU to reduce transfers. Adaptive neural refresh balances new AI estimates against processing load; depth and foot-contact processing continue on delivered camera frames between estimates.
+
+**Smooth tracker output:** An adaptive 1-Euro filter reduces small positional and rotational jitter while responding to movement. SteamVR and OSC share the smoothing implementation. OVR playspace movement is applied as a coordinate transform so virtual space dragging does not become a physical body movement.
+
+All camera and model processing stays on your PC. Tracking quality and responsiveness still depend on visibility, camera frame rate and available GPU time.
+
 ## Requirements
 
 - **Windows 10/11 x64** and an **NVIDIA GeForce RTX 4000 or 5000 series GPU**. The current accelerated package does not support older GPUs or CPU-only tracking.
@@ -56,12 +66,9 @@ Switching back to a libusbK-based setup later replaces those drivers again. The 
 
 </details>
 
-<details>
-<summary><b>Kinect v2 repeatedly disconnects on Windows 11</b></summary>
+### Kinect v2 repeatedly disconnects on Windows 11
 
 Try disabling audio enhancements: **Sound settings > More sound settings > Recording > Microphone Array (Xbox NUI Sensor) > Properties > Advanced**, then uncheck **Enable audio enhancements** and apply. If Windows presents a separate Enhancements tab, check there instead. Also check the power adapter and use a direct USB 3.0 connection.
-
-</details>
 
 <details>
 <summary><b>SteamVR trackers are missing or the add-on is blocked</b></summary>
