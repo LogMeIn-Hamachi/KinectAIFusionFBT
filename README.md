@@ -1,218 +1,86 @@
 # KinectAIFusionFBT
 
-**High-Performance, AI-Powered Kinect Full-Body Tracking for SteamVR & VRChat**
+Kinect full-body tracking for **SteamVR and VRChat**, using Fast SAM 3D Body and Kinect depth. Runs locally on your PC. SteamVR trackers are the primary output; VRChat OSC is also supported.
 
-[![Native C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.wikipedia.org/wiki/C%2B%2B20)
-[![NVIDIA CUDA 12.8](https://img.shields.io/badge/NVIDIA-CUDA%2012.8%20%7C%20TensorRT-green.svg)](https://developer.nvidia.com/cuda-toolkit)
-[![SteamVR Compatible](https://img.shields.io/badge/SteamVR-Trackers%20%28Waist%20%2B%20Feet%29-black.svg)](https://store.steampowered.com/app/250820/SteamVR/)
-[![Platform Windows](https://img.shields.io/badge/Platform-Windows%2010%20%2F%2011%20x64-lightgrey.svg)](https://microsoft.com)
+**[Download the latest release](https://github.com/LogMeIn-Hamachi/KinectAIFusionFBT/releases/latest)**
 
-**KinectAIFusionFBT** is a zero-bloat, native Windows C++20 application that transforms your **Kinect for Xbox 360 (v1)** or **Kinect for Xbox One (v2)** into virtual SteamVR Vive Trackers for Full-Body Tracking (FBT) in **VRChat** and other SteamVR titles.
+## Requirements
 
-By combining the **Fast SAM 3D Body** deep learning foundation model with high-speed metric depth cloud registration and ground-plane physics, it delivers responsive waist, left foot, and right foot tracking directly on your local GPU—with no Python runtime, no cloud dependency, and no extra wearables required.
+- **Windows 10/11 x64** and an **NVIDIA GeForce RTX 4000 or 5000 series GPU**. The current accelerated package does not support older GPUs or CPU-only tracking.
+- **Kinect v1 / Xbox 360** with its powered USB adapter, or **Kinect v2 / Xbox One** with its powered USB 3.0 adapter. Connect v2 directly to a USB 3.0 port.
+- **SteamVR**, a compatible headset, and **two positional VR controllers** for alignment.
+- The official Microsoft SDK: **[SDK 1.8 for Kinect v1](https://www.microsoft.com/en-us/download/details.aspx?id=40278)** or **[SDK 2.0 for Kinect v2](https://www.microsoft.com/en-us/download/details.aspx?id=44561)**, plus an up-to-date NVIDIA driver.
 
----
+## Install and start
 
-## Highlights & Features
+1. Download all three parts of the full Windows package from **Releases**. Open `.zip.001` with 7-Zip and extract to a permanent folder.
+2. With SteamVR closed, run **Install SteamVR Trackers.cmd** from that folder.
+3. Start SteamVR and **KinectRGBD.exe**, then click **Start**. The first model load prepares a GPU cache and can take a while.
+4. Position the camera so it sees your feet, floor and wrists. Your head does not need to be visible. Select your body and click **Lock player**. Kinect v1 has motor tilt buttons; adjust v2 by hand.
+5. Click **Capture proportions**. Use the eight-second countdown to stand comfortably with feet shoulder-width apart; hold still during the four-second capture.
+6. Reset any OVR space-drag offsets, then click **Align to VR**. Follow the five poses shown in your headset. Keep a normal controller grip and wrists clear of your body. Each pose waits for your trigger press and gives three seconds to settle; retries stay on the same step.
+7. Click **Start trackers**, then perform **VRChat's FBT calibration** to fit your avatar.
 
-- **Adaptive SteamVR Smoothing**: Position and rotation filtering runs with SteamVR updates and adjusts to observed movement. It approaches a fixed target without overshoot; live latency and tracking quality depend on camera rate, visibility and PC load.
-- **In-Headset SteamVR Calibration Guide**: A visual guide renders in your headset during calibration. Body-and-hands diagrams, settling countdowns, progress based on accepted wrist observations, and retry screens guide you through setup.
-- **Fast SAM 3D Body Deep Learning**: Selective FP8 TensorRT backbone and native LibTorch C++ GPU decoder reconstruct full anatomical 3D joints from raw camera video in real time.
-- **High-Priority GPU Stream**: AI inference uses a dedicated high-priority CUDA stream. It still shares the GPU with VRChat.
-- **Adaptive Neural Cadence**: Auto / 30 Hz / 20 Hz / 15 Hz controls the rate of new AI estimates. Depth and foot contacts are processed on every delivered camera frame, including frames that reuse a recent AI estimate.
-- **Full Metric Depth & Ground-Plane Locking**: Automatically detects room floor tilt and locks soles to the floor to prevent floating or floor clipping.
-- **Playspace Move & Space Drag Support**: Seamlessly moves with OVR Advanced Settings playspace drag and rotation without losing calibration.
-- **Saved Alignment Memory**: Saves the complete calibration reference and can restore it after a capture/SteamVR restart with the same headset connection. Camera and physical room must still match; see Everyday Use for upgrade requirements and limitations.
+Single-camera tracking still depends on visibility: hidden limbs, side-on poses and lying down can be less reliable.
 
----
+## Updates and everyday use
 
-## Hardware Compatibility
+**Update:** Close the app and SteamVR. Extract the release's **AppUpdate.zip** into your existing installation when its release notes say it is compatible, or extract the full package to a permanent folder. Run **Update SteamVR Trackers.cmd** from the updated package, then restart SteamVR. Keep the app and bundled driver versions together.
 
-| Component | Requirements | Notes |
-| :--- | :--- | :--- |
-| **Kinect Sensor** | **Kinect v1 / Xbox 360** *(Model 1414 / 1473)*<br>**Kinect v2 / Xbox One** *(Model 1520)* | • Kinect v1 requires standard 12V AC power + USB adapter cable (works on USB 2.0 or 3.0).<br>• Kinect v2 requires standard 12V AC power + USB 3.0 adapter cable. |
-| **GPU** | **NVIDIA GeForce RTX 4000 / 5000 Series**<br>*(Ada Lovelace or Blackwell)* | **RTX 4000 or 5000 series required** (tested on Windows 11 with RTX 5070 Ti). Requires native hardware FP8 Tensor Cores for the accelerated neural model. Older cards (RTX 20 and 30 series) lack hardware FP8 compute and are not supported. NVIDIA TensorRT and CUDA 12.8 runtimes are bundled in the release. |
-| **VR Headset** | **Any SteamVR-compatible PCVR Headset** | Meta Quest (Link / AirLink / Virtual Desktop), Valve Index, HTC Vive, Bigscreen Beyond, Pico 4, Windows Mixed Reality, etc. |
-| **Controllers** | **2 Positional VR Controllers** | Used during the quick 5-pose alignment routine. |
+**Saved alignment:** With the same Kinect position, room and headset connection, start tracking, lock your player and use **Confirm saved alignment** once VR tracking settles. Check tracker placement before starting output. Saves from before v1.2.2 need one fresh alignment. Confirmation does not measure your physical position again; a changed room reference or moved camera needs **Align to VR**. Full Quest sleep/resume recovery has not yet been verified.
 
----
+**Extra trackers:** Hips and feet are the default. The **Knees / Elbows / Chest** checkboxes add optional trackers, up to eight total. Stop output before changing them, then repeat VRChat's FBT calibration. Occluded limbs and joint rotations remain approximate.
 
-## Quick Start (Pre-Built Release)
+**GPU load:** Leave neural refresh on **Auto**, or choose **20 Hz / 15 Hz** in Advanced to reduce AI work. **30 Hz** requests the highest rate, subject to camera speed and PC load.
 
-### 1. Prerequisites
-1. Install the official Microsoft Kinect driver for your sensor:
-   - **For Kinect v1 / Xbox 360**: Install [Microsoft Kinect for Windows SDK 1.8](https://www.microsoft.com/en-us/download/details.aspx?id=40278).
-   - **For Kinect v2**: Install [Microsoft Kinect for Windows SDK 2.0](https://www.microsoft.com/en-us/download/details.aspx?id=44561).
-2. Install the latest [NVIDIA Game Ready Driver](https://www.nvidia.com/Download/index.aspx).
-3. Ensure **SteamVR** is installed and has been run at least once.
+**OSC:** Enable OSC in VRChat and select OSC output in the app. It shares the app's smoothing approach with SteamVR, although VRChat's receiving and tracking-loss behavior differs.
 
-### 2. Installation
-1. Download all three **`KinectAIFusionFBT-v1.2.2-Windows-x64.zip`** parts from [Releases](https://github.com/LogMeIn-Hamachi/KinectAIFusionFBT/releases). Open `.zip.001` with 7-Zip to extract the complete folder. Existing users can use the smaller **AppUpdate.zip** instead; close the app and SteamVR before replacing files.
-2. Extract the ZIP into a permanent folder on your PC (e.g. `C:\Tools\KinectAIFusionFBT`).
-3. Make sure SteamVR is closed, then right-click **`Install SteamVR Trackers.cmd`** and select **Run as administrator** (or double-click it). This registers the virtual tracker driver with SteamVR.
+## Troubleshooting
 
----
+### Kinect stopped working after D.R.A.F.T. VR / libusbK installation
 
-## Updating the SteamVR Driver
-
-Close SteamVR completely, extract the new package to its permanent location, and double-click **Update SteamVR Trackers.cmd** in that package. It switches registration from an older Kinect package to the new bundled driver, leaving old files, settings and unrelated drivers untouched. Start SteamVR afterward. Keep the new folder in place.
-
-If you replace files in the already registered folder, SteamVR loads those files on its next start; the updater confirms that the folder is already registered. It does not download releases or copy preferences between packages. A failed registration update attempts to restore the previous Kinect registration.
-
-## Optional Knee, Elbow and Chest Trackers
-
-Hips and feet are always included (three trackers by default). Use the **Add: Knees / Elbows / Chest** checkboxes beside **Confirm saved alignment** to enable any extras you want, for up to eight trackers. Knees and elbows each add a left/right pair. Leave all three unchecked for the default. Your selection is remembered locally.
-
-Stop tracker output before changing the selection, then start trackers and recalibrate full-body tracking **inside VRChat** so it binds the added or removed trackers. Changing this selection does not invalidate the app's camera-to-VR alignment. Both SteamVR and OSC support the same choices; the preview lists the selected trackers and their tracking status.
-
-Extra trackers use the existing learned body pose without another AI inference. They require a usable learned pose and do not switch to SDK limbs when that pose is unavailable. Chest direction comes from the torso; knee and elbow direction is inferred from the upper limb and torso, so axial twist and occluded poses remain approximate. Extra trackers are optional because unreliable estimates can constrain the avatar poorly.
-
-This release requires its matching app, SteamVR driver and tracker profile. Restart SteamVR after updating them. Optional SteamVR devices appear when first enabled; deselected devices disconnect and may remain listed until SteamVR restarts. No extra devices are registered in a fresh default three-tracker session.
-
-## Step-by-Step Calibration Guide
-
-### Step A: Position Your Kinect
-- Place the Kinect approximately **1.8 to 2.5 meters (6 to 8 feet)** in front of your play area at roughly waist or chest height.
-- Angle the camera so it can see your feet on the floor and your hands raised in front of you.
-- *(Kinect v1 only)*: You can use the `−` and `+` motor buttons in the application to electronically adjust camera tilt.
-
-### Step B: Launch & Lock Player
-1. Start SteamVR and put on your headset.
-2. Open **`KinectRGBD.exe`** and click **Start**.
-3. Stand in front of the camera so your body is visible in the preview window, select your body, and click **Lock player**.
-   *(Note: The first model load prepares a local TensorRT GPU cache and can take a while. Later loads reuse it; startup time still depends on storage and GPU load.)*
-
-### Step C: Body Proportions
-- Click **Capture proportions**.
-- An 8-second countdown will start: stand in a relaxed pose with your feet shoulder-width apart.
-- The app collects 4 seconds of bone length samples to fit your proportions. Captured lengths survive brief tracking gaps and verified recovery of the same person. Capture again after restarting tracking or selecting a different person; proportions are not saved as a reusable person profile.
-
-### Step D: VR Alignment (In-Headset Guide)
-- Reset any OVR Advanced Settings space drag offsets before aligning.
-- Put your headset on, grab both controllers, and click **Align to VR** (or press the button in the desktop UI).
-- An interactive guide will appear floating in front of you inside SteamVR:
-  - **Pose 1 — Hands at waist**: Elbows by your sides, hands forward at waist height and shoulder-width apart.
-  - **Pose 2 — Hands apart**: Keep elbows near your sides and swing forearms outward into a shallow V. Hands remain forward, just wider than your shoulders.
-  - **Pose 3 — Hands at chest**: Return to shoulder width and bend elbows to bring hands in front of your chest, leaving space from your body.
-  - **Pose 4 — Reach forward**: From chest height, reach towards the camera, stopping before your elbows straighten.
-  - **Pose 5 — Left high, right low**: Left hand in front of your chest, right hand in front of your waist. Keep both hands apart and clear of your body. This independently checks the alignment.
-  - Keep the same normal grip throughout. Approximate positions and angles are fine; keep wrists clear of your torso. Each pose waits for your trigger press, then gives three seconds to settle before capture. The fifth pose checks the fit independently; pressing the trigger does not bypass validation.
-  - *If a pose needs adjustment, an amber retry screen will explain what to adjust—simply squeeze your trigger to try that step again without restarting.*
-
-### Step E: Activate Trackers & VRChat
-1. In `KinectRGBD.exe`, click **Start trackers**.
-2. Look at your SteamVR status window: you will see three new green tracker icons (**Waist**, **Left Foot**, and **Right Foot**).
-3. Open **VRChat**:
-   - Go to **Settings $\to$ Tracking & IK $\to$ Calibrate FBT**.
-   - Stand in T-Pose / I-Pose to match your avatar's trackers, and squeeze both triggers to lock in!
-
----
-
-## Everyday Use
-
-- **Saved Alignment (1.2.2)**: Run **Align to VR once after upgrading**. Older saves lack the original room reference; their learned wrist offsets are retained, but they cannot safely restore alignment. New saves retain that reference across capture and app restarts. Use the same headset and connection method, and leave the Kinect and physical room setup unchanged.
-  - Start SteamVR $\to$ Launch `KinectRGBD.exe` $\to$ Click **Start** $\to$ **Lock player** $\to$ **Confirm saved alignment** $\to$ **Start trackers**.
-- **Headset removal / SteamVR restart**: A runtime or universe change pauses output. Let tracking settle, then confirm the saved alignment. Confirmation restores the original reference rather than attaching the old coordinates to the new standing origin. It never starts output automatically. A source mismatch is rejected; return to the original connection or align again.
-- **Limits**: Confirmation checks saved metadata, not a fresh physical wrist measurement. Verify tracker placement after restoring. A moved Kinect, new room setup, or an unreported headset-map shift still needs **Align to VR**. The persistence bug is covered by offline tests; complete Quest resume recovery is not yet established by a live tracker-placement check.
-- **Playspace Movement**: Moving your playspace with OVR Advanced Settings space drag applies consistently to all selected trackers.
-
----
-
-## Settings & Tuning
-
-In the **Advanced** tab of `KinectRGBD.exe`:
-- **Tracking Cadence**:
-  - `Auto (GPU adaptive)` *(Default)*: Starts at up to 30 Hz, reduces the rate after sustained processing delays, and steps back up when the load recovers. It uses processing time and queued-frame delay, not a GPU usage percentage.
-  - `30 Hz (Full AI)`: Up to 30 new AI estimates per second.
-  - `20 Hz (Balanced)`: Up to 20 new estimates per second, reducing neural work.
-  - `15 Hz (Low GPU)`: Up to 15 new estimates per second for demanding VR titles.
-  - The displayed actual Hz counts completed AI estimates. All modes are limited by camera delivery and available processing time. A camera delivering 15 fps cannot produce 30 new image estimates per second; selecting 15 Hz does not halve that camera rate again.
-  - If tracking seems to drop in and out, click **Diagnostics** after reproducing it. The report separates deliberate AI-result reuse from missing estimates, source switches and tracker validity losses. A temporarily untracked foot stays connected to SteamVR but has an invalid pose until it is observed again.
-- **Model Selection**: Switch between **SAM optimized** (fastest, FP8 + TF32) and **SAM original**.
-- **OSC Output**: Secondary VRChat output on `localhost:9000`. Uses the same adaptive position/rotation smoothing and bounded prediction as the SteamVR driver, with playspace movement applied after smoothing. Enable OSC in VRChat and select OSC output in the app, then enable output. Expired trackers stop sending updates; VRChat controls how long its last received pose remains visible. App-side smoothing is shared, but receiver timing and tracking-loss behavior can differ from native SteamVR.
-- **Diagnostic controls**: **Depth / SAM body** is required for the fitted SAM path. Turning it off selects an SDK-based comparison path and does not disable all AI work. **SDK bone fit** controls only SDK joint fitting; SAM retains its own body fit. Replay shows recorded geometry settings and disables those controls. Comparison mode and extra tracker selection remain available; replay runs AI on every frame, so it is not an Auto/cadence benchmark.
-- **Diagnostics**: Exports a short numbers-only processing history, including fresh/reused estimates, host call timings, depth supports and actual foot plant state. It also exports `vr-reference.csv`: recent VR events, poses, current/saved coordinate references and source keys for investigating resume problems. Source keys identify a headset connection, not a physical room. Host encoder/decoder durations are not isolated GPU kernel timings. No camera images are included.
-
----
-
-## Building from Source
-
-### Prerequisites
-- Windows 10/11 x64
-- [Visual Studio 2022](https://visualstudio.microsoft.com/) with C++ desktop development workload (C++20 support)
-- [CMake 3.25+](https://cmake.org/download/)
-- [Git with Git LFS](https://git-lfs.com/)
-- [NVIDIA CUDA Toolkit 12.9](https://developer.nvidia.com/cuda-toolkit) for development; the bundled PyTorch runtime uses CUDA 12.8.
-- Microsoft Kinect SDK 1.8 and/or SDK 2.0
-
-### Build Steps
-```powershell
-# 1. Clone the repository with Git LFS
-git clone https://github.com/LogMeIn-Hamachi/KinectAIFusionFBT.git
-cd KinectAIFusionFBT
-git lfs pull
-
-# 2. First install the pinned dependencies and Torch environment from docs/development/BUILD.md.
-# Then configure and build via CMake.
-cmake --preset windows-x64
-cmake --build build --config Release
-
-# 3. Run the automated offline test suites (10/10 must pass)
-ctest --test-dir build -C Release --output-on-failure
-```
-
----
-
-## Troubleshooting & FAQ
+If D.R.A.F.T. VR's driver setup (or Zadig) replaced the Kinect drivers with **libusbK**, Microsoft Kinect SDK apps can no longer access the affected sensor interfaces. Closing D.R.A.F.T. VR does not switch the drivers back. In Device Manager, **Kinect** entries under **libusbK USB Devices** are the clue; v2 may instead be named **Xbox NUI Sensor (Composite Parent)**. [OpenKinect documents restoring the SDK driver](https://github.com/OpenKinect/libfreenect2#windows--visual-studio).
 
 <details>
-<summary><b>SteamVR says "Add-on blocked" or trackers don't show up</b></summary>
+<summary><b>Restore the Microsoft Kinect drivers</b></summary>
 
-1. In SteamVR, open **Settings $\to$ Startup / Shutdown $\to$ Manage Add-ons**.
-2. Verify that **`kinect_fbt`** is set to **On**.
-3. If it is not listed, make sure you ran `Install SteamVR Trackers.cmd` while SteamVR was closed.
+1. Close all Kinect apps. Open **Device Manager** and identify your Kinect entries under **libusbK USB Devices**.
+2. Unplug the Kinect's USB cable. Choose **View > Show hidden devices** so its entries remain visible.
+3. Right-click each affected Kinect entry and choose **Uninstall device**. Select **Delete the driver software for this device** (or **Attempt to remove the driver for this device**, depending on Windows) when offered. Administrator permissions may be needed. Remove only the Kinect entries, not unrelated libusbK devices or USB controllers.
+4. If the official SDK is missing, install the matching **SDK 1.8 (v1)** or **SDK 2.0 (v2)** linked above. If already installed but restoration fails, repair/reinstall it.
+5. Reconnect the Kinect and choose **Action > Scan for hardware changes**. Restart Windows if requested. Windows should load the Microsoft drivers; the affected Kinect entries should no longer use libusbK. Try **Start** in this app again.
+
+If libusbK returns immediately, its driver package may still be installed. Repeat removal with the driver-removal checkbox selected; do not rerun D.R.A.F.T. VR's libusbK installer during recovery. See [Microsoft's device and driver removal guide](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/using-device-manager-to-uninstall-devices-and-driver-packages).
+
+Switching back to a libusbK-based setup later replaces those drivers again. The same sensor interface cannot use both drivers at once.
+
 </details>
 
 <details>
-<summary><b>My feet are clipping into the floor or floating</b></summary>
+<summary><b>Kinect v2 repeatedly disconnects on Windows 11</b></summary>
 
-1. Ensure the Kinect can clearly see the floor where you are standing.
-2. In `KinectRGBD.exe`, make sure **Foot contact** is checked.
-3. **Ankle-to-sole distance** in Advanced is an anatomical distance in metres (default `0.075`), not a playspace height adjustment. Check camera alignment and VRChat's avatar calibration before changing it to compensate for avatar shoes.
+Try disabling audio enhancements: **Sound settings > More sound settings > Recording > Microphone Array (Xbox NUI Sensor) > Properties > Advanced**, then uncheck **Enable audio enhancements** and apply. If Windows presents a separate Enhancements tab, check there instead. Also check the power adapter and use a direct USB 3.0 connection.
+
 </details>
 
 <details>
-<summary><b>Kinect v1 shows "Kinect SDK 1.8 runtime missing"</b></summary>
+<summary><b>SteamVR trackers are missing or the add-on is blocked</b></summary>
 
-You must install the official **Microsoft Kinect for Windows SDK 1.8** installer, not just a bare driver. This provides `Kinect10.dll` in your Windows `System32` directory.
+Enable **kinect_fbt** in **SteamVR Settings > Startup / Shutdown > Manage Add-ons**. If absent, close SteamVR and run **Update SteamVR Trackers.cmd** from your installed package, then restart SteamVR.
+
 </details>
 
 <details>
-<summary><b>Kinect v2 drops frames or fails to start</b></summary>
+<summary><b>Feet float or clip through the floor</b></summary>
 
-Kinect v2 requires high USB 3.0 isochronous bandwidth. Ensure the Kinect v2 USB cable is plugged directly into a native motherboard USB 3.0 port (blue port or USB 3.1/3.2), not into an unpowered USB hub.
+Keep the floor and feet visible, enable **Foot contact**, and check camera alignment and VRChat FBT calibration. **Ankle-to-sole distance** describes your anatomy; it is not a playspace height adjustment.
+
 </details>
 
-<details>
-<summary><b>Kinect v2 restarts in a loop / keeps disconnecting on Windows 11</b></summary>
+For other issues, see the [troubleshooting guide](packaging/windows/TROUBLESHOOTING.md). **Diagnostics** exports numeric tracking information without camera images.
 
-A known Windows 11 driver conflict causes the Kinect v2 to repeatedly power cycle and restart in a continuous loop when audio enhancements are active:
-1. Right-click the **speaker icon** in the Windows taskbar (by the clock) and select **Sound settings**.
-2. Scroll down and click **More sound settings** to open the classic Sound dialog.
-3. Switch to the **Recording** tab.
-4. Select **Microphone Array (Xbox NUI Sensor)** and click **Properties**.
-5. Switch to the **Advanced** tab.
-6. Under **Signal Enhancements**, uncheck **Enable audio enhancements**.
-7. Click **Apply**, then **OK**.
-</details>
+## More information
 
----
-
-## License & Acknowledgements
-
-- Deep learning pose estimation powered by **Fast SAM 3D Body** and **DINOv3** (Meta Platforms, Inc.).
-- Native runtime utilizes **NVIDIA TensorRT RTX**, **NVIDIA CUDA Toolkit**, **ONNX Runtime**, and **PyTorch LibTorch C++**.
-- Sensor communication via **Microsoft Kinect for Windows SDK**.
-- Virtual tracker emulation powered by **Valve OpenVR**.
-
-See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [docs/licenses/](docs/licenses/) for complete upstream licensing terms.
+- [Package guide](packaging/windows/README.md)
+- [Build from source](docs/development/BUILD.md) — includes Git LFS and required development dependencies.
+- [Third-party notices](THIRD_PARTY_NOTICES.md) and [upstream licenses](docs/licenses/) — includes Fast SAM 3D Body, Meta's models, NVIDIA, PyTorch and OpenVR.
