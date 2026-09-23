@@ -18,10 +18,11 @@ V3 medianPoint(const std::deque<AlignmentObservation> &w) {
     return {median(x), median(y), median(z)};
 }
 } // namespace
-void AlignmentSession::reset(bool automaticOffsets,bool controllersOnly) {
+void AlignmentSession::reset(bool automaticOffsets,bool controllersOnly,bool lowEndPc) {
     floor_={};
     automaticOffsets_=automaticOffsets;
     controllersOnly_=controllersOnly || automaticOffsets;
+    lowEndPc_=lowEndPc;
     fittedOffsets_={};
     windows_ = {};
     lastAccepted_ = {};
@@ -56,14 +57,18 @@ void AlignmentSession::add(const Frame &frame, uint32_t id, const Settings &sett
             status_[device] = "no time-matched VR pose";
             continue;
         }
-        if (!window.empty() && (frame.host <= window.back().host || frame.host - window.back().host > .12))
+        const double maxGap=lowEndPc_?.18:.12;
+        const double windowSpan=lowEndPc_?.8:.4;
+        const size_t minFrames=lowEndPc_?5:6;
+        const double minSpan=lowEndPc_?.4:.25;
+        if (!window.empty() && (frame.host <= window.back().host || frame.host - window.back().host > maxGap))
             window.clear();
         window.push_back({frame.host, device, point, vr.devices[device],
                           automaticOffsets_?V3{}:settings.deviceOffsets[device]});
-        while (window.size() > 1 && frame.host - window.front().host > .4)
+        while (window.size() > 1 && frame.host - window.front().host > windowSpan)
             window.pop_front();
-        if (window.size() < 6 || frame.host - window.front().host < .25) {
-            status_[device] = "hold briefly";
+        if (window.size() < minFrames || frame.host - window.front().host < minSpan) {
+            status_[device] = lowEndPc_?"waiting for enough camera frames":"hold briefly";
             continue;
         }
         auto center = medianPoint(window);
@@ -216,12 +221,12 @@ Calibration calibrateKnownOffsets(std::span<const AlignmentObservation> fit,std:
     if(floor && floor->valid)result.reason+=" Floor height and tilt matched to SteamVR.";
     return result;
 }
-void GuidedAlignment::reset(double start,const VrSample* vr){*this={};stageStart_=start;if(vr)bindTrackingReference(reference_,*vr);for(auto& s:sessions_)s.reset(true,true);}
+void GuidedAlignment::reset(double start,const VrSample* vr,bool lowEndPc){*this={};stageStart_=start;lowEndPc_=lowEndPc;if(vr)bindTrackingReference(reference_,*vr);for(auto& s:sessions_)s.reset(true,true,lowEndPc_);}
 size_t GuidedAlignment::size()const{size_t n=0;for(auto& s:sessions_)n+=s.size();return n;}
 void GuidedAlignment::capturePose(double time) {
     if(done_ || captureStart_ || !std::isfinite(time) || time<stageStart_)return;
     captureStart_=time+calibrationSettleSeconds;
-    sessions_[stage_].reset(true,true);retryReason_.clear();
+    sessions_[stage_].reset(true,true,lowEndPc_);retryReason_.clear();
 }
 AlignmentProgress alignmentProgress(std::span<const AlignmentObservation> samples,double time) {
     std::array<int,3> count{};std::array<double,3> first{},last{};
@@ -243,6 +248,7 @@ AlignmentProgress alignmentProgress(std::span<const AlignmentObservation> sample
 AlignmentCue GuidedAlignment::cue(double time)const {
     auto c=alignmentCue(stage_,captureStart_?time-*captureStart_:0,done_,!captureStart_);
     if(c.collecting) {
+        c.retrySeconds=std::max(0,int(std::ceil((lowEndPc_?30:20)-(time-*captureStart_))));
         const auto progress=alignmentProgress(sessions_[stage_].samples(),time);
         c.seconds=progress.secondsRemaining;c.progressPercent=progress.percent;
     }
@@ -270,9 +276,9 @@ void GuidedAlignment::add(const Frame& frame,uint32_t id,const Settings& setting
     const double elapsed=frame.host-*captureStart_;
     auto retry=[&](const std::string& why) {
         captureStart_.reset();triggerReleased_={};retryReason_=why;
-        result_.valid=false;result_.reason=why;sessions_[stage_].reset(true,true);
+        result_.valid=false;result_.reason=why;sessions_[stage_].reset(true,true,lowEndPc_);
     };
-    if(elapsed>20){retry("Could not see both wrists steadily. Adjust your position, then squeeze a trigger to retry this pose. Earlier poses are kept.");return;}
+    if(elapsed>(lowEndPc_?30:20)){retry("Could not see both wrists steadily. Adjust your position, then squeeze a trigger to retry this pose. Earlier poses are kept.");return;}
     auto& session=sessions_[stage_];
     if(elapsed<0){session.pause();return;}
     // Use the same observation-selection policy for fit and independent check.

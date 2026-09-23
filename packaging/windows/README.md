@@ -1,8 +1,10 @@
-# KinectAIFusionFBT — v1.2.2
+# KinectAIFusionFBT — v1.2.3-rc.1 pre-release
 
 Full-body tracking for SteamVR using Kinect v1 or v2 and Fast SAM 3D Body. Native Windows x64; NVIDIA GeForce RTX 4000 or 5000 series GPU required (tested on Windows 11 with RTX 5070 Ti). Older RTX 20/30 series lack hardware FP8 and are not supported.
 
 Open **START-HERE.html** for the setup guide. Extract the entire ZIP into a writable folder before running **KinectRGBD.exe**. Keep its files together. This is a full package, not an update patch: both SAM models and their native runtimes are included.
+
+This preview adds **Low-end PC (calibration)** in Advanced. Enable it before Align to VR if wrist counts remain at 0/12 on a slower PC. It allows more time for steady samples; final alignment checks and normal tracker output are unchanged.
 
 ## First use
 

@@ -29,6 +29,8 @@ Engine::Engine(std::filesystem::path root) : root_(std::move(root)) {
         const char* names[]{"Auto (GPU adaptive)","30 Hz (Full AI)","20 Hz (Balanced)","15 Hz (Low GPU / Heavy VRChat)"};
         view_.cadenceStatus=names[savedCadence];
     }
+    std::ifstream lowEndFile(root_/"calibration-low-end.txt");int lowEnd=0;
+    if(lowEndFile>>lowEnd && (lowEnd==0 || lowEnd==1))view_.lowEndCalibration=lowEnd==1;
     const bool accepted=loadCalibration(calibrationFile_, view_.calibration, view_.settings,&view_.wristOffsetsReady);
     savedAlignment_.remember(view_.calibration,accepted);
 }
@@ -197,6 +199,16 @@ void Engine::chooseExposure(bool prefer30) {
     view_.notice=prefer30?"30 fps priority selected. Press Start. Dim scenes may look darker or grainier.":
         "Automatic exposure selected. In dim light the colour camera may slow to 15 fps.";
 }
+void Engine::chooseLowEndCalibration(bool enabled) {
+    std::lock_guard l(mutex_);
+    if(view_.collecting || view_.replay)return;
+    std::ofstream file(root_/"calibration-low-end.txt",std::ios::trunc);
+    file<<int(enabled)<<'\n';file.flush();
+    if(!file){view_.notice="Could not save low-end PC calibration choice.";return;}
+    view_.lowEndCalibration=enabled;
+    view_.notice=enabled?"Low-end PC calibration enabled. Start Align to VR; each pose may take longer, but alignment quality checks stay the same.":
+        "Normal calibration timing restored.";
+}
 void Engine::chooseCadence(int choice) {
     std::lock_guard l(mutex_);
     if(choice<0 || choice>3)return;
@@ -222,7 +234,7 @@ void Engine::beginCalibration() {
     if(!view_.frame->vr.rawTransformValid) {
         view_.collecting=false;view_.notice="Connect SteamVR and both controllers before aligning.";return;
     }
-    alignment_.reset(now(),&view_.frame->vr);
+    alignment_.reset(now(),&view_.frame->vr,view_.lowEndCalibration);
     view_.calibrationSamples = 0;
     view_.calibrationDetail = alignment_.feedback();
     view_.notice = "Take your time on each pose. Squeeze either trigger, or click Capture pose, only when ready. No timed positioning and no exact palm twists; your head may be out of view.";
@@ -1005,6 +1017,7 @@ void Engine::exportDiagnostics() {
       << "\nvr_reference_notes=Source keys identify a headset connection, not a physical room. Restore is explicit; physical placement must still match."
       << "\nwrist_offsets_ready=" << s.wristOffsetsReady
       << "\nalignment_routine=" << "guided_learn_offsets_with_holdout"
+      << "\nlow_end_calibration=" << s.lowEndCalibration
       << "\ncalibration_pacing=user_ready_then_3s_settle_and_3s_observed_hold"
       << "\nalignment_method=controllers_only_automatic_wrist_offsets"
       << "\nkinect_tilt_degrees=" << (s.tiltAngle?std::to_string(*s.tiltAngle):"unavailable")

@@ -9,6 +9,8 @@ int main() {
         {std::ofstream file(broken);file<<"invalid";}
         {
             Engine engine(root); // Empty isolated root: no models, camera, preferences or GPU sessions.
+            engine.chooseLowEndCalibration(true);
+            if(!engine.view().lowEndCalibration)throw std::runtime_error("Low-end calibration choice was not applied");
             for(int attempt=0;attempt<2;++attempt) {
                 engine.start(broken); // Nonempty replay path never enters camera/VR-input capture.
                 const double deadline=now()+3;
@@ -38,11 +40,18 @@ int main() {
             engine.stop();
             if(engine.view().running || engine.view().replay)throw std::runtime_error("Stop retained running/replay state");
         }
-        std::filesystem::remove(broken);std::filesystem::remove(valid);std::filesystem::remove(root);
+        {
+            Engine restored(root);
+            if(!restored.view().lowEndCalibration)throw std::runtime_error("Low-end calibration choice was not restored after restart");
+            restored.chooseLowEndCalibration(false);
+        }
+        std::filesystem::remove(broken);std::filesystem::remove(valid);
+        std::filesystem::remove(root/"calibration-low-end.txt");std::filesystem::remove(root);
         std::cout<<"Offline engine checks passed: fatal error, restart, output refusal and replay controls. No camera, GPU inference or tracker output.\n";
         return 0;
     } catch(const std::exception& e) {
-        std::filesystem::remove(broken);std::filesystem::remove(valid);std::filesystem::remove(root);
+        std::filesystem::remove(broken);std::filesystem::remove(valid);
+        std::filesystem::remove(root/"calibration-low-end.txt");std::filesystem::remove(root);
         std::cerr<<e.what()<<'\n';return 1;
     }
 }

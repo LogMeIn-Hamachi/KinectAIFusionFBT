@@ -50,6 +50,7 @@ enum {
     TiltDown,
     TiltUp,
     SteamVrToggle,
+    LowEndCalibration,
     KneesToggle = 150,
     ElbowsToggle,
     ChestToggle,
@@ -300,7 +301,7 @@ void paint() {
              RGB(164,185,202),smallFont);
         text(dc,40,532,1110,38,s.replay?
              L"Replay uses recorded geometry settings. Only comparison mode and extra tracker choices can be changed; AI runs on every frame.":
-             L"Diagnostic controls: disabling Depth / SAM body selects the SDK path. SDK bone fit affects SDK joints only.",
+             L"Low-end PC collects calibration samples at uneven frame rates; final alignment checks stay unchanged.",
              RGB(164,185,202),smallFont);
     }
     BitBlt(screen, 0, 0, client.right, client.bottom, dc, 0, 0, SRCCOPY);
@@ -331,8 +332,9 @@ void advancedControls(bool show) {
     sole << s.settings.soleOffset;
     SetDlgItemTextW(mainWindow, SoleOffset, sole.str().c_str());
     SendDlgItemMessageW(mainWindow,SteamVrToggle,BM_SETCHECK,s.steamVrOutput?BST_CHECKED:BST_UNCHECKED,0);
+    SendDlgItemMessageW(mainWindow,LowEndCalibration,BM_SETCHECK,s.lowEndCalibration?BST_CHECKED:BST_UNCHECKED,0);
     SendMessageW(cadenceBox, CB_SETCURSEL, s.cadenceChoice, 0);
-    for (int id : {DepthToggle, ConstraintToggle, ContactToggle, VrToggle, SaveOffsets, SoleOffset, SteamVrToggle, ModelSelect, ModeSelect, CadenceSelect})
+    for (int id : {DepthToggle, ConstraintToggle, ContactToggle, VrToggle, SaveOffsets, SoleOffset, SteamVrToggle, LowEndCalibration, ModelSelect, ModeSelect, CadenceSelect})
         ShowWindow(GetDlgItem(mainWindow, id), show ? SW_SHOW : SW_HIDE);
 }
 void setup() {
@@ -427,6 +429,7 @@ LRESULT CALLBACK procedure(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
             control(L"BUTTON", L"VR constraints", VrToggle, 685, 452, 190, 30, BS_AUTOCHECKBOX);
             control(L"BUTTON", L"Apply offsets", SaveOffsets, 675, 317, 160, 32);
             control(L"BUTTON", L"SteamVR trackers (instead of OSC)", SteamVrToggle, 40, 489, 460, 30, BS_AUTOCHECKBOX);
+            control(L"BUTTON", L"Low-end PC (calibration)", LowEndCalibration, 520, 489, 400, 30, BS_AUTOCHECKBOX);
             for (int id : {DepthToggle, ConstraintToggle, ContactToggle, VrToggle})
                 SendDlgItemMessageW(window, id, BM_SETCHECK, BST_CHECKED, 0);
             advancedControls(false);
@@ -451,6 +454,7 @@ LRESULT CALLBACK procedure(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
                 enableIfChanged(h,!s.replay && !s.collecting && !s.bodyCollecting);
             }
             enableIfChanged(cadenceBox,!s.replay);
+            enableIfChanged(GetDlgItem(window,LowEndCalibration),!s.replay && !s.collecting);
             enableIfChanged(GetDlgItem(window,SaveOffsets),!s.replay && !s.collecting && !s.bodyCollecting);
             for(int i=0;i<9;++i)enableIfChanged(GetDlgItem(window,OffsetBase+i),!s.replay && !s.collecting && !s.bodyCollecting);
             enableIfChanged(GetDlgItem(window,SoleOffset),!s.replay && !s.collecting && !s.bodyCollecting);
@@ -547,6 +551,9 @@ LRESULT CALLBACK procedure(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
                 engine->chooseTrackers(extras);
                 break;
             }
+            case LowEndCalibration:
+                engine->chooseLowEndCalibration(SendDlgItemMessageW(window,LowEndCalibration,BM_GETCHECK,0,0)==BST_CHECKED);
+                break;
             case Start:
                 engine->start();
                 break;

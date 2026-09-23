@@ -29,6 +29,45 @@ int main() {
             observations.erase(std::remove_if(observations.begin(),observations.end(),[](auto& s){return s.device==2;}),observations.end());
             check(!alignmentProgress(observations,13.1).ready,"One wrist completed the pose");
         }
+        {
+            // A slow camera must not leave the optional calibration mode at 0/12.
+            // The normal mode remains unchanged for the same input.
+            for(bool lowEndPc:{false,true}) {
+                AlignmentSession session;session.reset(true,true,lowEndPc);
+                for(int tick=0;tick<80;++tick) {
+                    Frame frame;frame.host=100+tick/10.;frame.vr.host=frame.host;
+                    Body body;body.id=42;
+                    for(int d=1;d<=2;++d) {
+                        int joint=d==1?LWrist:RWrist;
+                        V3 point{d==1?-.25:.25,1.1,1.8};
+                        body.joints[joint]={point,1,.01,1};
+                        frame.vr.devices[d]={point,{},true};
+                    }
+                    frame.bodies.push_back(body);session.add(frame,42,{});
+                }
+                check(lowEndPc?session.deviceSamples(1)>=12 && session.deviceSamples(2)>=12:
+                    session.deviceSamples(1)==0 && session.deviceSamples(2)==0,
+                    "Slow-camera calibration mode did not control wrist sample collection");
+            }
+            GuidedAlignment lowEndCue;lowEndCue.reset(100,nullptr,true);
+            lowEndCue.capturePose(100);
+            check(lowEndCue.cue(105).retrySeconds==28,
+                  "Low-end PC overlay countdown did not match its longer timeout");
+            AlignmentSession moving;moving.reset(true,true,true);
+            for(int tick=0;tick<80;++tick) {
+                Frame frame;frame.host=100+tick/10.;frame.vr.host=frame.host;
+                Body body;body.id=42;
+                for(int d=1;d<=2;++d) {
+                    int joint=d==1?LWrist:RWrist;
+                    V3 point{(d==1?-.25:.25)+tick*.04,1.1,1.8};
+                    body.joints[joint]={point,1,.01,1};
+                    frame.vr.devices[d]={point,{},true};
+                }
+                frame.bodies.push_back(body);moving.add(frame,42,{});
+            }
+            check(moving.deviceSamples(1)==0 && moving.deviceSamples(2)==0,
+                  "Low-end PC mode accepted moving wrists as steady");
+        }
         Rigid truth{axisAngle({0,1,0},1.1)*axisAngle({1,0,0},-.45),{.6,1.2,-1.4}};
         std::array<V3,3> expected{{{}, {.045,-.065,.12},{-.035,-.08,.085}}};
         auto samples=[&](int rotationMode=0) {
@@ -71,11 +110,11 @@ int main() {
         check(stableFloor.value().valid,"Stable observed floor was not accepted");
         stableFloor.add(2,wrongFloor);
         check(!stableFloor.value().valid,"Sudden floor-height change retained stale floor reference");
-        for(double angleScale:{.7,1.})for(double fps:{15.,30.})for(bool badCheck:{false,true})for(bool useFloor:{false,true}) {
+        for(double angleScale:{.7,1.})for(auto [fps,lowEndPc]:{std::pair{15.,false},std::pair{30.,false},std::pair{10.,true}})for(bool badCheck:{false,true})for(bool useFloor:{false,true}) {
             VrSample referenceVr;referenceVr.epoch=3;referenceVr.rawTransformValid=true;
             referenceVr.referenceSource=17;referenceVr.referenceUniverse=29;
             referenceVr.standingToRaw={axisAngle({0,1,0},.4),{1,.2,-2}};
-            GuidedAlignment routine;routine.reset(108,&referenceVr);Settings qs;
+            GuidedAlignment routine;routine.reset(108,&referenceVr,lowEndPc);Settings qs;
             double finished=0,entered=100;int previousStage=-1;
             for(int tick=0;tick<int(100*fps) && !routine.done();++tick) {
                 Frame f;f.host=100+tick/fps;f.vr=referenceVr;f.vr.host=f.host;Body b;b.id=42;

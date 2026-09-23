@@ -12,6 +12,8 @@
 
 **Trackers move incorrectly during space drag:** run Align to VR once after upgrading from an older release, with OVR offsets reset. New saved references preserve subsequent playspace translation/rotation through app restarts. With the Kinect, physical room and headset connection unchanged, let SteamVR settle and use Confirm saved alignment after a restart. Check placement before enabling output. A moved camera or changed physical origin needs fresh alignment; full Quest sleep/resume recovery remains unverified. If displacement persists, click Diagnostics to capture numeric reference history. Other movers that independently modify device poses are unverified.
 
+**Alignment remains at 0/12 samples:** in Advanced, enable **Low-end PC (calibration)** before starting Align to VR. It tolerates slower or uneven camera delivery without loosening the final fit check. If the count still stays at zero, click Diagnostics immediately after the failed pose and inspect wrist visibility and VR timing.
+
 **Alignment fails:** keep both wrists visible and separate from your torso, use a consistent normal controller grip and wait until you are comfortable before pressing a trigger/Capture pose. You control when each pose begins. The countdown gives three seconds to settle, followed by sampling. Your head does not need to be visible. Avoid gripping the controllers differently between poses.
 
 **Tracking jitter or wrong side-on/lying poses:** a single camera cannot see occluded limbs. Keep the entire legs in view, avoid furniture covering the feet, and use adequate room lighting for SAM's colour image. Difficult occlusions remain a limitation. The SDK baseline modes in Advanced are diagnostic comparisons; RGB-D fusion is the normal tracking mode.

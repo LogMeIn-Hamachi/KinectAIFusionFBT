@@ -1,35 +1,20 @@
-# KinectAIFusionFBT v1.2.2 — Saved alignment and reliability
+# KinectAIFusionFBT v1.2.3-rc.1 — Low-end PC calibration preview
 
-## Changes since v1.2.0
+This pre-release lets users with slower or uneven camera processing opt into a more patient VR alignment. In **Advanced**, enable **Low-end PC (calibration)** before clicking **Align to VR**. Each pose can wait longer for steady wrist observations. The ordinary calibration path, final fit thresholds, independent check pose, tracking and GPU cadence are unchanged.
 
-- Save the complete calibration coordinate reference. Restore it across app/capture restarts and playspace changes without attaching old coordinates to a new standing origin. SteamVR and OSC share the repair.
-- Permit explicit same-headset/connection restoration after a runtime change. Reject incompatible or unavailable references; confirmation never starts output automatically.
-- Preserve captured proportions across temporary tracking gaps and verified recovery of the same person.
-- Harden SteamVR input/overlay shutdown and app error recovery. Failed calibration saves now retain session usability with a clear warning.
-- Make calibration progress follow actual accepted observations and clarify diagnostic/replay controls.
-- Preserve coordinate references and captured proportions in new recordings, while retaining readers for older recordings.
-- Reuse the SAM image input buffer without changing input pixels. This reduces allocation/preprocessing work; no claim of increased VRChat frame rate.
-- Add local numeric processing and VR-reference diagnostics, plus version/source identification.
+The change addresses a code-level way calibration can remain at 0/12 even with visible wrists. Synthetic 10 fps calibration and moving-wrist rejection tests pass. It has not yet been validated on the user's RTX 4050 or in a live headset session, so this is a test release rather than a proven fix for every 0/12 cause. Diagnostics records whether the option was enabled.
 
-Tracking articulation, foot contact, smoothing and Auto/30/20/15 Hz policies retain their existing behavior. Optional knees, elbows and chest remain available; default is hips and feet.
+## Existing v1.2.2 installations
 
-## Upgrade instructions
-
-1. Close the app and SteamVR.
-2. Extract **KinectAIFusionFBT-v1.2.2-AppUpdate.zip** into an existing v1.2.0 installation, replacing the included files. Models and native dependencies are unchanged. Personal calibration/preferences are not included in the update.
-3. Run **Update SteamVR Trackers.cmd**, then restart SteamVR and the app.
-4. **Run Align to VR once after upgrading.** Old saves lack the original coordinate reference. Learned wrist offsets are retained, but cannot supply the missing reference.
-
-Update app and driver together. New recordings require this version's reader; older recordings remain readable. Back up your installation before downgrading because older versions cannot read the new saved-alignment format.
+1. Close this app and SteamVR. Keep a backup of your existing installation and calibration files.
+2. Extract **KinectAIFusionFBT-v1.2.3-rc.1-AppUpdate.zip** into the existing v1.2.2 folder, replacing included files. It includes the matching app and driver, not the unchanged models and native runtimes.
+3. Run **Update SteamVR Trackers.cmd** from the updated folder and restart SteamVR.
+4. Enable the option in Advanced, then run a fresh **Align to VR** to test it. Check tracker placement before enabling output.
 
 ## New installations
 
-Download all three **KinectAIFusionFBT-v1.2.2-Windows-x64.zip.001 / .002 / .003** parts into one folder and extract `.001` with 7-Zip. All parts are required. The full package includes SAM original/optimized and native runtimes. Kinect/NVIDIA drivers and SteamVR are external prerequisites. Checksums are included.
+Download all three **KinectAIFusionFBT-v1.2.3-rc.1-Windows-x64.zip.001 / .002 / .003** parts into one folder and open `.001` with 7-Zip. Install the appropriate Microsoft Kinect SDK/runtime, NVIDIA driver and SteamVR separately. Follow **START-HERE.html** inside the extracted package.
 
-## Validation and remaining limitations
+## Validation and limits
 
-Full Release build, all ten offline suites, offline startup/restart checks and installer/updater fixture tests passed. Saved-reference tests cover restart, combined playspace translation/rotation, incoming controllers and all eight SteamVR/OSC tracker roles. Packages use explicit file allowlists, model hashes and ZIP integrity checks.
-
-**Full Quest sleep/resume recovery still needs live verification.** A short numeric headset-removal test did not establish a full sleep transition or physical tracker alignment afterward. This release fixes demonstrated persistence defects; it does not guarantee recovery from an unreported headset-map shift. Check placement after confirming, and align again after moving the Kinect or changing physical room setup. Diagnostics saves numbers only, not camera images.
-
-Single-camera occlusion, sideways and lying poses remain difficult. Overlay reliability still needs broader live validation. No personal media, calibration files, preferences, diagnostics, device identifiers or GPU caches are distributed.
+The Release build, all ten offline CTest suites, an isolated app restart test, and the package integrity checks passed. These tests do not establish live tracking accuracy or a particular frame rate on another PC. No personal recordings, calibration, preferences, sensor IDs, diagnostics or GPU caches are included.

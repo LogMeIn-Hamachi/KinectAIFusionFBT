@@ -43,6 +43,8 @@ Single-camera tracking still depends on visibility: hidden limbs, side-on poses 
 
 **GPU load:** Leave neural refresh on **Auto**, or choose **20 Hz / 15 Hz** in Advanced to reduce AI work. **30 Hz** requests the highest rate, subject to camera speed and PC load.
 
+**Low-end PC calibration:** If **Align to VR** stays at 0/12 wrist samples or repeatedly times out on a slower computer, open **Advanced** and check **Low-end PC (calibration)** before starting alignment. This gives each pose longer to collect still, visible wrists at uneven camera rates. It does not change the final alignment quality checks or normal tracker output. The choice is saved locally; turn it off if normal calibration works reliably. If samples still remain at zero, use **Diagnostics** to see whether Kinect wrist visibility or VR pose timing is missing.
+
 **OSC:** Enable OSC in VRChat and select OSC output in the app. It shares the app's smoothing approach with SteamVR, although VRChat's receiving and tracking-loss behavior differs.
 
 ## Troubleshooting

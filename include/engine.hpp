@@ -16,6 +16,7 @@ struct View {
     int cadenceChoice{}; // 0 Auto (worker-budget adaptive), 1 Full (30 Hz), 2 Balanced (20 Hz), 3 Low GPU (15 Hz)
     std::string cadenceStatus{"Auto (30 Hz)"};
     bool prefer30{false};
+    bool lowEndCalibration{false};
     std::string exposureStatus;
     Calibration calibration;
     Settings settings;
@@ -106,6 +107,7 @@ class Engine {
     void chooseModel(int);
     void chooseCadence(int);
     void chooseExposure(bool prefer30);
+    void chooseLowEndCalibration(bool enabled);
     void exportDiagnostics();
     std::filesystem::path root() const { return root_; }
 };

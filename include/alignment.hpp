@@ -60,6 +60,7 @@ AlignmentProgress alignmentProgress(std::span<const AlignmentObservation>,double
 class AlignmentSession {
     bool automaticOffsets_{};
     bool controllersOnly_{};
+    bool lowEndPc_{};
     std::array<V3,3> fittedOffsets_{};
     std::array<std::deque<AlignmentObservation>, 3> windows_;
     std::array<double, 3> lastAccepted_{};
@@ -68,7 +69,7 @@ class AlignmentSession {
     StableFloor floor_;
 
   public:
-    void reset(bool automaticOffsets=false,bool controllersOnly=false);
+    void reset(bool automaticOffsets=false,bool controllersOnly=false,bool lowEndPc=false);
     void pause(){windows_={};}
     void add(const Frame &, uint32_t id, const Settings &, const PosePrior *prior=nullptr,const Calibration* reference=nullptr);
     Calibration finish();
@@ -108,13 +109,14 @@ class GuidedAlignment {
     std::array<bool,2> triggerReleased_{};
     std::string retryReason_;
     bool done_{};
+    bool lowEndPc_{};
     Calibration result_;
     Calibration candidate_;
     Calibration reference_;
     std::array<V3,3> offsets_{};
     StableFloor floor_;
 public:
-    void reset(double start,const VrSample* vr=nullptr);
+    void reset(double start,const VrSample* vr=nullptr,bool lowEndPc=false);
     void capturePose(double time);
     void add(const Frame&,uint32_t,const Settings&,const PosePrior* prior=nullptr);
     AlignmentCue cue(double time)const;
